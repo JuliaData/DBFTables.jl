@@ -111,9 +111,11 @@ function read_dbf_records!(io::IO, df::DataFrame, header::DBFHeader; deleted=fal
 					push!(r, missing)
 				end
 			elseif header.fields[i].typ == Int
-				push!(r, parse(header.fields[i].typ, String(fld_data)))
+				tmp = tryparse(header.fields[i].typ, String(fld_data))
+				push!(r, tmp.hasvalue ? tmp.value : missing)
 			elseif header.fields[i].typ == Float64
-				push!(r, parse(header.fields[i].typ, String(fld_data)))
+				tmp = tryparse(header.fields[i].typ, String(fld_data))
+				push!(r, tmp.hasvalue ? tmp.value : missing)
 			elseif header.fields[i].typ == String
 				push!(r, strip(String(fld_data)))
 			elseif header.fields[i].typ == Void
