@@ -1,5 +1,6 @@
 using DBFTables
 using Base.Test
+using Missings
 
 dir = @__DIR__
 # dir = joinpath(Pkg.dir("DBFTables"), "test")
