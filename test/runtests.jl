@@ -13,3 +13,9 @@ df = DBFTables.read_dbf(joinpath(dir, "test.dbf"))
 @test df[:FLOAT][1] == 10.21
 @test df[:NUMERIC][2] == 12.21
 @test df[:INTEGER][3] == 102
+
+# Testing missing record handling
+@test ismissing(df[:BOOL][4])
+@test ismissing(df[:FLOAT][5])
+@test ismissing(df[:NUMERIC][6])
+@test ismissing(df[:INTEGER][7])

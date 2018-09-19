@@ -1,6 +1,6 @@
 module DBFTables
 
-using Nulls, DataFrames
+using Missings, DataFrames
 
 # Read DBF files in xBase format
 # Files written in this format have the extension .dbf
@@ -108,16 +108,18 @@ function read_dbf_records!(io::IO, df::DataFrame, header::DBFHeader; deleted=fal
 				elseif logical in ['N', 'n', 'F', 'f']
 					push!(r, false)
 				else
-					push!(r, null)
+					push!(r, missing)
 				end
 			elseif header.fields[i].typ == Int
-				push!(r, parse(header.fields[i].typ, String(fld_data)))
+				tmp = tryparse(header.fields[i].typ, String(fld_data))
+				push!(r, tmp.hasvalue ? tmp.value : missing)
 			elseif header.fields[i].typ == Float64
-				push!(r, parse(header.fields[i].typ, String(fld_data)))
+				tmp = tryparse(header.fields[i].typ, String(fld_data))
+				push!(r, tmp.hasvalue ? tmp.value : missing)
 			elseif header.fields[i].typ == String
 				push!(r, strip(String(fld_data)))
 			elseif header.fields[i].typ == Void
-				push!(r, null)
+				push!(r, missing)
 			else
 				warn("Type $(header.fields[i].typ) is not supported")
 			end
@@ -133,7 +135,7 @@ end
 
 function read_dbf(io::IO; deleted=false)
     header = read_dbf_header(io)
-	df = DataFrame(map(f->f.typ, header.fields), map(f->Symbol(f.nam), header.fields), 0)
+	df = DataFrame(map(f->Union{f.typ,Missing}, header.fields), map(f->Symbol(f.nam), header.fields), 0)
 	read_dbf_records!(io, df, header; deleted=deleted)
 	return df
 end
