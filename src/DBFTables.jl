@@ -1,6 +1,6 @@
 module DBFTables
 
-using Missings, DataFrames
+using DataFrames, Printf
 
 # Read DBF files in xBase format
 # Files written in this format have the extension .dbf
@@ -27,7 +27,7 @@ struct DBFHeader
 end
 
 function dbf_field_type(fld::Char, dec::UInt8)
-	rt = Void
+	rt = Nothing
 	if fld == 'C'
 		rt = String
 	elseif fld == 'D'
@@ -51,18 +51,18 @@ function dbf_field_type(fld::Char, dec::UInt8)
 end
 
 function read_dbf_field(io::IO)
-	field_name = strip(replace((String(read!(io, Vector{UInt8}(11)))), '\0', ' ')) # 0x00
+	field_name = strip(replace(String(read!(io, Vector{UInt8}(undef, 11))),'\0'=>' ')) # 0x00
 	field_type = read(io, Char)  # 0x0B
 	read(io, Int32) # skip 0x0C
 	field_len = read(io, UInt8) # 0x10
 	field_dec = read(io, UInt8) # 0x11
-	read!(io, Vector{UInt8}(14)) # reserved
+	read!(io, Vector{UInt8}(undef, 14)) # reserved
 	return DBFFieldDescriptor(field_name, dbf_field_type(field_type, field_dec), field_len, field_dec)
 end
 
 function read_dbf_header(io::IO)
 	ver = read(io, UInt8)
-	date = read!(io, Vector{UInt8}(3)) # 0x01
+	date = read!(io, Vector{UInt8}(undef, 3)) # 0x01
 	last_update = @sprintf("%4d%02d%02d", date[1]+1900, date[2], date[3])
 	records = read(io, Int32) # 0x04
 	hsize = read(io, Int16) # 0x08
@@ -70,10 +70,10 @@ function read_dbf_header(io::IO)
 	read(io, Int16) # reserved # 0x0C
 	incomplete = Bool(read(io, UInt8)) # 0x0E
 	encrypted = Bool(read(io, UInt8)) # 0x0F
-	read!(io, Vector{UInt8}(12)) # reserved
+	read!(io, Vector{UInt8}(undef, 12)) # reserved
 	mdx = Bool(read(io, UInt8)) # 0x1C
 	langId = read(io, UInt8) # 0x1D
-	read!(io, Vector{UInt8}(2)) # reserved # 0x1E
+	read!(io, Vector{UInt8}(undef, 2)) # reserved # 0x1E
 	fields = DBFFieldDescriptor[]
 
 	while !eof(io)
@@ -99,7 +99,7 @@ function read_dbf_records!(io::IO, df::DataFrame, header::DBFHeader; deleted=fal
 		r = Any[]
 		for i = 1:length(header.fields)
 			#print("P: $(position(io)) ")
-			fld_data = read!(io, Vector{UInt8}(header.fields[i].len))
+			fld_data = read!(io, Vector{UInt8}(undef, header.fields[i].len))
 			#println("D: $(ascii(fld_data))")
 			if header.fields[i].typ == Bool
 				logical = Char(fld_data[1])
@@ -112,13 +112,13 @@ function read_dbf_records!(io::IO, df::DataFrame, header::DBFHeader; deleted=fal
 				end
 			elseif header.fields[i].typ == Int
 				tmp = tryparse(header.fields[i].typ, String(fld_data))
-				push!(r, tmp.hasvalue ? tmp.value : missing)
+				push!(r, tmp==nothing ? missing : tmp)
 			elseif header.fields[i].typ == Float64
 				tmp = tryparse(header.fields[i].typ, String(fld_data))
-				push!(r, tmp.hasvalue ? tmp.value : missing)
+				push!(r, tmp==nothing ? missing : tmp)
 			elseif header.fields[i].typ == String
 				push!(r, strip(String(fld_data)))
-			elseif header.fields[i].typ == Void
+			elseif header.fields[i].typ == Nothing
 				push!(r, missing)
 			else
 				warn("Type $(header.fields[i].typ) is not supported")
