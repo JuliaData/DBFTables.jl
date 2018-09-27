@@ -1,5 +1,5 @@
 using DBFTables
-using Base.Test
+using Test
 using Missings
 
 dir = @__DIR__
