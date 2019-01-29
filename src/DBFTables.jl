@@ -45,7 +45,7 @@ function dbf_field_type(fld::Char, dec::UInt8)
 	elseif fld == 'L'
 		rt = Bool
 	else
-		 warn("Unknown record type: $(fld)")
+		@warn "Unknown record type: $(fld), storing it as `missing`"
 	end
 	return rt
 end
@@ -98,9 +98,8 @@ function read_dbf_records!(io::IO, df::DataFrame, header::DBFHeader; deleted=fal
 		is_deleted = (read(io, UInt8) == 0x2A)
 		r = Any[]
 		for i = 1:length(header.fields)
-			#print("P: $(position(io)) ")
+			@debug "P: $(position(io)) "
 			fld_data = read!(io, Vector{UInt8}(undef, header.fields[i].len))
-			#println("D: $(ascii(fld_data))")
 			if header.fields[i].typ == Bool
 				logical = Char(fld_data[1])
 				if logical in ['Y', 'y', 'T', 't']
@@ -121,14 +120,19 @@ function read_dbf_records!(io::IO, df::DataFrame, header::DBFHeader; deleted=fal
 			elseif header.fields[i].typ == Nothing
 				push!(r, missing)
 			else
-				warn("Type $(header.fields[i].typ) is not supported")
+				# TODO:
+				# Double check if there is a way for the code to reach here
+				# Every fields should have been typed in one of these:
+				# [Bool, Int, Float, String, Nothing]
+				@warn "Type $(header.fields[i].typ) is not supported"
 			end
+			@debug "D: $(r[end])"
 		end
 		if !is_deleted || deleted
 			push!(df, r)
 		end
 		rc += 1
-		#println("R: $(position(io)), $(eof(io)), $(rc) ")
+		@debug "R: $(position(io)), $(eof(io)), $(rc) "
 	end
 	return df
 end
