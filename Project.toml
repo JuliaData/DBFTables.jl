@@ -1,0 +1,17 @@
+name = "DBFTables"
+uuid = "75c7ada1-017a-5fb6-b8c7-2125ff2d6c93"
+version = "0.1.0"
+
+[deps]
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+
+[compat]
+julia = "0.7, 1.0"
+
+[extras]
+Missings = "e1d29d7a-bbdc-5cf2-9ac0-f12de2c33e28"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Missings", "Test"]
