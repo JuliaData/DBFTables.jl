@@ -245,7 +245,7 @@ function isdeleted(dbf::Table, row::Integer)
     data[i] == 0x2a
 end
 
-"Iterate over the rows of a DBF Table, yielding a NamedTuple for each row"
+"Iterate over the rows of a DBF Table, yielding a DBFTables.Row for each row"
 function Base.iterate(dbf::Table, st = 1)
     st > length(dbf) && return nothing
     return Row(dbf, st), st + 1
