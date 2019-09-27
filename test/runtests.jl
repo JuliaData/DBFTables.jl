@@ -59,6 +59,8 @@ row, st = iterate(dbf)
         @test DBFTables.getrow(row) === 1
         @test DBFTables.gettable(row) === dbf
         @test sum(1 for row in dbf) === 7
+        @test propertynames(dbf) == [:CHAR, :DATE, :BOOL, :FLOAT, :NUMERIC, :INTEGER]
+        @test propertynames(row) == [:CHAR, :DATE, :BOOL, :FLOAT, :NUMERIC, :INTEGER]
     end
 
     @testset "column" begin
