@@ -12,8 +12,7 @@ Read xBase / dBASE III+ [.dbf](https://en.wikipedia.org/wiki/.dbf) files in Juli
 
 ```julia
 using DBFTables
-io = open("test.dbf")
-dbf = DBFTables.Table(io)
+dbf = DBFTables.Table("test.dbf")
 
 # whole columns can be retrieved by their name
 # note that this creates a copy, so instead of repeated `dbf.field` calls,
