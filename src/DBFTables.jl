@@ -5,7 +5,7 @@ using Printf, Tables, WeakRefStrings
 "Field/column descriptor, part of the Header"
 struct FieldDescriptor
     name::Symbol
-    type::DataType
+    type::Type
     length::UInt8
     ndec::UInt8
 end
