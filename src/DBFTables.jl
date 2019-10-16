@@ -235,6 +235,7 @@ function Base.show(io::IO, dbf::Table)
     nr = length(dbf)
     nc = length(getfields(dbf))
     println(io, "DBFTables.Table with $nr rows and $nc columns")
+    println(io, Tables.schema(dbf))
 end
 
 Base.isempty(dbf::Table) = getheader(dbf).records == 0

@@ -40,7 +40,7 @@ row, st = iterate(dbf)
         @test sprint(
             show,
             dbf,
-        ) === "DBFTables.Table with 7 rows and 6 columns\n"
+        ) === "DBFTables.Table with 7 rows and 6 columns\nTables.Schema:\n :CHAR     Union{Missing, String} \n :DATE     Union{Missing, String} \n :BOOL     Union{Missing, Bool}   \n :FLOAT    Union{Missing, Float64}\n :NUMERIC  Union{Missing, Float64}\n :INTEGER  Union{Missing, Int64}  \n"
     end
 
     @testset "iterate" begin
