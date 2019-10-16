@@ -46,6 +46,7 @@ row, st = iterate(dbf)
     @testset "iterate" begin
         @test st === 2
         @test row.CHAR === "Bob"
+        @test_throws ArgumentError row.nonexistent_field
         firstrow = (
             CHAR = "Bob",
             DATE = "19900102",
@@ -70,6 +71,7 @@ row, st = iterate(dbf)
         @test length(dbf.CHAR) === 7
         @test dbf.CHAR isa Vector{Union{String,Missing}}
         @test dbf.INTEGER isa Vector{Union{Int,Missing}}
+        @test_throws ArgumentError row.nonexistent_field
         @test dbf.INTEGER[2] === 101
         @test ismissing(dbf.INTEGER[7])
         @test dbf.CHAR[2] === "John"

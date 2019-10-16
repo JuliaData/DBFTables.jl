@@ -22,6 +22,7 @@ struct Header
     mdx::Bool
     lang_id::UInt8
     fields::Vector{FieldDescriptor}
+    fieldcolumns::Dict{Symbol, Int}
 end
 
 "Struct representing the DBF Table"
@@ -96,8 +97,16 @@ function Header(io::IO)
     skip(io, 2)  # reserved
     fields = FieldDescriptor[]
 
+    # use Dict for quicker column index lookup
+    fieldcolumns = Dict{Symbol, Int}()
+    col = 1
     while !eof(io)
-        push!(fields, read_dbf_field(io))
+        field = read_dbf_field(io)
+        fieldcolumns[field.name] = col
+        push!(fields, field)
+        col += 1
+
+        # peek if we are at the end
         mark(io)
         trm = read(io, UInt8)
         if trm == 0xD
@@ -118,6 +127,7 @@ function Header(io::IO)
         mdx,
         lang_id,
         fields,
+        fieldcolumns,
     )
 end
 
@@ -253,8 +263,9 @@ end
 
 function Base.getproperty(row::Row, name::Symbol)
     dbf = gettable(row)
+    header = getheader(dbf)
     str = getstrings(dbf)
-    colidx = findfirst(x -> x === name, propertynames(dbf))
+    colidx = get(header.fieldcolumns, name, nothing)
     colidx === nothing && throw(ArgumentError("Column not present: $name"))
     type = @inbounds getfields(dbf)[colidx].type
     rowidx = getrow(row)
@@ -281,9 +292,10 @@ Base.propertynames(row::Row) = propertynames(gettable(row))
 
 "Get an entire DBF column as a Vector. Usage: `dbf.myfield`"
 function Base.getproperty(dbf::Table, name::Symbol)
-    col = findfirst(x -> x === name, propertynames(dbf))
+    header = getheader(dbf)
+    col = get(header.fieldcolumns, name, nothing)
     col === nothing && throw(ArgumentError("Column not present: $name"))
-    nrow = getheader(dbf).records
+    nrow = header.records
     @inbounds type = getfields(dbf)[col].type
     str = getstrings(dbf)
     @inbounds colarr = [dbf_value(type, str[col, i]) for i = 1:nrow]
