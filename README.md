@@ -41,7 +41,7 @@ df = DataFrame(dbf)
 
 ## Implementation details
 
-The DBF header contains information on the amount of rows, which columns are present, what type they are, and how many bytes the entries are. Based on this we can create a `Tables.Schema`. Each row is a fixed amount of bytes. All data is represented as strings, with different conventions based on the specified type. There are no delimiters between the entries, but since we know the sizes from the, it is not needed.
+The DBF header contains information on the amount of rows, which columns are present, what type they are, and how many bytes the entries are. Based on this we can create a `Tables.Schema`. Each row is a fixed amount of bytes. All data is represented as strings, with different conventions based on the specified type. There are no delimiters between the entries, but since we know the sizes from the header, it is not needed.
 
 The `DBFTables.Table` struct holds both the header and data. All data is read into memory in one go as a `Vector{UInt8}`. To provide efficient access into the individual entries, we use [WeakRefStrings](https://github.com/JuliaData/WeakRefStrings.jl/). WeakRefStrings' `StringArray` only holds the offsets and lengths into the `Vector{UInt8}` with all the data. Then we still need to convert from the string to the julia type. This is done on demand with `dbf_value`.
 
