@@ -28,7 +28,7 @@ end
 struct Table
     header::Header
     data::Vector{UInt8}  # WeakRefString references this
-    strings::StringArray{WeakRefString{UInt8},2}
+    strings::StringArray{String,2}
 end
 
 "Struct representing a single row or record of the DBF Table"
@@ -139,7 +139,7 @@ end
 
 dbf_value(T::Union{Type{Int},Type{Float64}}, str::AbstractString) =
     miss(tryparse(T, str))
-# String to avoid returning SubString{WeakRefString{UInt8}}
+# String to avoid returning SubString{String}
 function dbf_value(T::Type{String}, str::AbstractString)
     stripped = rstrip(str)
     if isempty(stripped)
@@ -199,7 +199,7 @@ function _create_stringarray(header::Header, data::AbstractVector)
     offsets = repeat(offsets_record, 1, header.records)
     offsets .+= reshape(row_offsets, 1, :)
 
-    StringArray{WeakRefString{UInt8},2}(data, offsets, lengths)
+    StringArray{String,2}(data, offsets, lengths)
 end
 
 "Create a NamedTuple representing a single row"
