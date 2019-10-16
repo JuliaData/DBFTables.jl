@@ -290,7 +290,7 @@ end
 Base.propertynames(dbf::Table) = getfield.(getfield(dbf, :header).fields, :name)
 Base.propertynames(row::Row) = propertynames(gettable(row))
 
-"Get an entire DBF column as a Vector. Usage: `dbf.myfield`"
+"Create a copy of an entire DBF column as a Vector. Usage: `dbf.myfield`"
 function Base.getproperty(dbf::Table, name::Symbol)
     header = getheader(dbf)
     col = get(header.fieldcolumns, name, nothing)

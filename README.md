@@ -16,6 +16,8 @@ io = open("test.dbf")
 dbf = DBFTables.Table(io)
 
 # whole columns can be retrieved by their name
+# note that this creates a copy, so instead of repeated `dbf.field` calls,
+# it is faster to once do `field = dbf.field` and then use `field` instead
 dbf.INTEGER  # => Union{Missing, Int64}[100, 101, 102, 0, 2222222222, 4444444444, missing]
 
 # example function that iterates over the rows and uses two columns
