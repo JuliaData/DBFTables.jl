@@ -1,6 +1,6 @@
 name = "DBFTables"
 uuid = "75c7ada1-017a-5fb6-b8c7-2125ff2d6c93"
-version = "0.2.0"
+version = "0.2.1"
 
 [deps]
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
