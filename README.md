@@ -1,8 +1,10 @@
 # DBFTables
 
-[![Build Status](https://travis-ci.org/JuliaData/DBFTables.jl.svg?branch=master)](https://travis-ci.org/JuliaData/DBFTables.jl)
-[![Coverage Status](https://coveralls.io/repos/JuliaData/DBFTables.jl/badge.svg?branch=master&service=github)](https://coveralls.io/github/JuliaData/DBFTables.jl?branch=master)
-[![codecov.io](http://codecov.io/github/JuliaData/DBFTables.jl/coverage.svg?branch=master)](http://codecov.io/github/JuliaData/DBFTables.jl?branch=master)
+[![CI](https://github.com/JuliaData/WeakRefStrings.jl/workflows/CI/badge.svg)](https://github.com/JuliaData/WeakRefStrings.jl/actions?query=workflow%3ACI)
+[![codecov](https://codecov.io/gh/JuliaData/WeakRefStrings.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/JuliaData/WeakRefStrings.jl)
+[![deps](https://juliahub.com/docs/DBFTables/deps.svg)](https://juliahub.com/ui/Packages/DBFTables/P7Qdk?t=2)
+[![version](https://juliahub.com/docs/DBFTables/version.svg)](https://juliahub.com/ui/Packages/DBFTables/P7Qdk)
+[![pkgeval](https://juliahub.com/docs/DBFTables/pkgeval.svg)](https://juliahub.com/ui/Packages/DBFTables/P7Qdk)
 
 Read xBase / dBASE III+ [.dbf](https://en.wikipedia.org/wiki/.dbf) files in Julia. Supports the [Tables.jl](https://github.com/JuliaData/Tables.jl) interface.
 
