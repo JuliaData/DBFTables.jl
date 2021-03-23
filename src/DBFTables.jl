@@ -174,7 +174,7 @@ Base.length(row::Row) = length(getfields(gettable(row)))
 Base.size(dbf::Table) = (length(dbf), length(getfields(dbf)))
 Base.size(dbf::Table, i) = size(dbf)[i]
 Base.size(row::Row) = (length(row),)
-Base.size(row::Row, i) = i == 1 ? length(row) : BoundsError(row, i)
+Base.size(row::Row, i) = i == 1 ? length(row) : throw(BoundsError(row, i))
 
 """
 	DBFTables.Table(source) => DBFTables.Table
