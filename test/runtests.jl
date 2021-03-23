@@ -58,6 +58,10 @@ row, st = iterate(dbf)
         )
         @test NamedTuple(row) === firstrow
         @test row isa DBFTables.Row
+        @test length(row) === 6
+        @test size(row) === (6,)
+        @test size(row, 1) === 6
+        @test_throws BoundsError size(row, 2)
         @test DBFTables.getrow(row) === 1
         @test DBFTables.gettable(row) === dbf
         @test sum(1 for row in dbf) === 7

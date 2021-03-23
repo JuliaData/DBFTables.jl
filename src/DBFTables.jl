@@ -170,8 +170,11 @@ getrow(row::Row) = getfield(row, :row)
 gettable(row::Row) = getfield(row, :table)
 
 Base.length(dbf::Table) = Int(getheader(dbf).records)
+Base.length(row::Row) = length(getfields(gettable(row)))
 Base.size(dbf::Table) = (length(dbf), length(getfields(dbf)))
 Base.size(dbf::Table, i) = size(dbf)[i]
+Base.size(row::Row) = (length(row),)
+Base.size(row::Row, i) = i == 1 ? length(row) : BoundsError(row, i)
 
 """
 	DBFTables.Table(source) => DBFTables.Table
@@ -232,8 +235,7 @@ function Base.show(io::IO, row::Row)
 end
 
 function Base.show(io::IO, dbf::Table)
-    nr = length(dbf)
-    nc = length(getfields(dbf))
+    nr, nc = size(dbf)
     println(io, "DBFTables.Table with $nr rows and $nc columns")
     println(io, Tables.schema(dbf))
 end
