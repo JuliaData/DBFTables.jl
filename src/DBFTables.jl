@@ -33,7 +33,7 @@ struct Table
 end
 
 "Struct representing a single row or record of the DBF Table"
-struct Row
+struct Row <: Tables.AbstractRow
     table::Table
     row::Int
 end
@@ -170,7 +170,6 @@ getrow(row::Row) = getfield(row, :row)
 gettable(row::Row) = getfield(row, :table)
 
 Base.length(dbf::Table) = Int(getheader(dbf).records)
-Base.length(row::Row) = length(getfields(gettable(row)))
 Base.size(dbf::Table) = (length(dbf), length(getfields(dbf)))
 Base.size(dbf::Table, i) = size(dbf)[i]
 Base.size(row::Row) = (length(row),)
@@ -264,7 +263,7 @@ function Base.iterate(dbf::Table, st = 1)
     return Row(dbf, st), st + 1
 end
 
-function Base.getproperty(row::Row, name::Symbol)
+function Tables.getcolumn(row::Row, name::Symbol)
     dbf = gettable(row)
     header = getheader(dbf)
     str = getstrings(dbf)
@@ -273,6 +272,14 @@ function Base.getproperty(row::Row, name::Symbol)
     type = @inbounds getfields(dbf)[colidx].type
     rowidx = getrow(row)
     return @inbounds dbf_value(type, str[colidx, rowidx])
+end
+
+function Tables.getcolumn(row::Row, i::Int)
+    dbf = gettable(row)
+    str = getstrings(dbf)
+    type = getfields(dbf)[i].type
+    rowidx = getrow(row)
+    return @inbounds dbf_value(type, str[i, rowidx])
 end
 
 Tables.istable(::Type{Table}) = true
@@ -291,7 +298,7 @@ end
 
 "List all available DBF column names"
 Base.propertynames(dbf::Table) = getfield.(getfield(dbf, :header).fields, :name)
-Base.propertynames(row::Row) = propertynames(gettable(row))
+Tables.columnnames(row::Row) = propertynames(gettable(row))
 
 "Create a copy of an entire DBF column as a Vector. Usage: `dbf.myfield`"
 function Base.getproperty(dbf::Table, name::Symbol)
