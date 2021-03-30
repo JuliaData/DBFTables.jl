@@ -46,7 +46,9 @@ row, st = iterate(dbf)
 
     @testset "iterate" begin
         @test st === 2
+        @test haskey(row, :CHAR)
         @test row.CHAR === "Bob"
+        @test row[2] === "19900102"
         @test_throws ArgumentError row.nonexistent_field
         firstrow = (
             CHAR = "Bob",
@@ -58,9 +60,15 @@ row, st = iterate(dbf)
         )
         @test NamedTuple(row) === firstrow
         @test row isa DBFTables.Row
+        @test row isa Tables.AbstractRow
+        @test length(row) === 6
+        @test size(row) === (6,)
+        @test size(row, 1) === 6
+        @test_throws BoundsError size(row, 2)
         @test DBFTables.getrow(row) === 1
         @test DBFTables.gettable(row) === dbf
         @test sum(1 for row in dbf) === 7
+        @test sum(1 for cell in row) === 6
         @test propertynames(dbf) == [:CHAR, :DATE, :BOOL, :FLOAT, :NUMERIC, :INTEGER]
         @test propertynames(row) == [:CHAR, :DATE, :BOOL, :FLOAT, :NUMERIC, :INTEGER]
     end
