@@ -1,6 +1,6 @@
 name = "DBFTables"
 uuid = "75c7ada1-017a-5fb6-b8c7-2125ff2d6c93"
-version = "0.2.3"
+version = "1.0.0"
 
 [deps]
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
@@ -9,7 +9,7 @@ WeakRefStrings = "ea10d353-3f73-51f8-a26c-33c1cb351aa5"
 
 [compat]
 Tables = "0.2, 1"
-WeakRefStrings = "0.6"
+WeakRefStrings = "0.6, 1"
 julia = "1.0"
 
 [extras]
