@@ -1,6 +1,6 @@
 module DBFTables
 
-using Printf, Tables, WeakRefStrings
+import Printf, Tables, WeakRefStrings
 
 "Field/column descriptor, part of the Header"
 struct FieldDescriptor
@@ -29,7 +29,7 @@ end
 struct Table
     header::Header
     data::Vector{UInt8}  # WeakRefString references this
-    strings::StringArray{String,2}
+    strings::WeakRefStrings.StringArray{String,2}
 end
 
 "Struct representing a single row or record of the DBF Table"
@@ -50,7 +50,6 @@ function typemap(fld::Char, ndec::UInt8)
         if ndec > 0
             rt = Float64
         else
-            # TODO do we want this?
             rt = Int
         end
     elseif fld == 'F' || fld == 'O'
@@ -84,7 +83,7 @@ function Header(io::IO)
     date1 = read(io, UInt8)
     date2 = read(io, UInt8)
     date3 = read(io, UInt8)
-    last_update = @sprintf("%4d%02d%02d", date1 + 1900, date2, date3)
+    last_update = Printf.@sprintf("%4d%02d%02d", date1 + 1900, date2, date3)
     records = read(io, UInt32)
     hsize = read(io, UInt16)
     rsize = read(io, UInt16)
@@ -134,7 +133,7 @@ end
 miss(x) = ifelse(x === nothing, missing, x)
 
 "Concert a DBF entry string to a Julia value"
-function dbf_value(T::Type{Bool}, str::AbstractString)
+function dbf_value(::Type{Bool}, str::AbstractString)
     char = first(str)
     if char in "YyTt"
         true
@@ -150,7 +149,7 @@ end
 dbf_value(T::Union{Type{Int},Type{Float64}}, str::AbstractString) =
     miss(tryparse(T, str))
 # String to avoid returning SubString{String}
-function dbf_value(T::Type{String}, str::AbstractString)
+function dbf_value(::Type{String}, str::AbstractString)
     stripped = rstrip(str)
     if isempty(stripped)
         # return missing rather than ""
@@ -159,7 +158,7 @@ function dbf_value(T::Type{String}, str::AbstractString)
         return String(stripped)
     end
 end
-dbf_value(T::Type{Nothing}, str::AbstractString) = missing
+dbf_value(::Type{Nothing}, ::AbstractString) = missing
 
 # define get functions using getfield since we overload getproperty
 "Access the header of a DBF Table"
@@ -176,7 +175,7 @@ Base.size(row::Row) = (length(row),)
 Base.size(row::Row, i) = i == 1 ? length(row) : throw(BoundsError(row, i))
 
 """
-	DBFTables.Table(source) => DBFTables.Table
+    DBFTables.Table(source) => DBFTables.Table
 
 Read a source, a path to a file or an opened stream, to a DBFTables.Table.
 This type conforms to the Tables interface, so it can be easily converted
@@ -211,7 +210,7 @@ function _create_stringarray(header::Header, data::AbstractVector)
     offsets = repeat(offsets_record, 1, header.records)
     offsets .+= reshape(row_offsets, 1, :)
 
-    StringArray{String,2}(data, offsets, lengths)
+    WeakRefStrings.StringArray{String,2}(data, offsets, lengths)
 end
 
 "Create a NamedTuple representing a single row"
