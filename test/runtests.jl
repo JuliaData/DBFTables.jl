@@ -38,10 +38,8 @@ row, st = iterate(dbf)
     @testset "show" begin
         @test sprint(show, row) === sprint(show, NamedTuple(row))
         # use replace to update to julia 1.4 union printing
-        @test replace(sprint(
-            show,
-            dbf,
-        ), r"\} +"=>"}") === "DBFTables.Table with 7 rows and 6 columns\nTables.Schema:\n :CHAR     Union{Missing, String}\n :DATE     Union{Missing, String}\n :BOOL     Union{Missing, Bool}\n :FLOAT    Union{Missing, Float64}\n :NUMERIC  Union{Missing, Float64}\n :INTEGER  Union{Missing, $Int}\n"
+        @test replace(sprint(show, dbf), r"\} +" => "}") ===
+              "DBFTables.Table with 7 rows and 6 columns\nTables.Schema:\n :CHAR     Union{Missing, String}\n :DATE     Union{Missing, String}\n :BOOL     Union{Missing, Bool}\n :FLOAT    Union{Missing, Float64}\n :NUMERIC  Union{Missing, Float64}\n :INTEGER  Union{Missing, $Int}\n"
     end
 
     @testset "iterate" begin

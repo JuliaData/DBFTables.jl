@@ -22,7 +22,7 @@ struct Header
     mdx::Bool
     lang_id::UInt8
     fields::Vector{FieldDescriptor}
-    fieldcolumns::Dict{Symbol, Int}
+    fieldcolumns::Dict{Symbol,Int}
 end
 
 "Struct representing the DBF Table"
@@ -97,7 +97,7 @@ function Header(io::IO)
     fields = FieldDescriptor[]
 
     # use Dict for quicker column index lookup
-    fieldcolumns = Dict{Symbol, Int}()
+    fieldcolumns = Dict{Symbol,Int}()
     col = 1
     while !eof(io)
         field = read_dbf_field(io)
@@ -146,8 +146,7 @@ function dbf_value(::Type{Bool}, str::AbstractString)
     end
 end
 
-dbf_value(T::Union{Type{Int},Type{Float64}}, str::AbstractString) =
-    miss(tryparse(T, str))
+dbf_value(T::Union{Type{Int},Type{Float64}}, str::AbstractString) = miss(tryparse(T, str))
 # String to avoid returning SubString{String}
 function dbf_value(::Type{String}, str::AbstractString)
     stripped = rstrip(str)
@@ -221,10 +220,8 @@ function Base.NamedTuple(row::Row)
     ncol = length(fields)
     rowidx = getrow(row)
     @inbounds record = @view str[:, rowidx]
-    @inbounds prs = (fields[col].name => dbf_value(
-        fields[col].type,
-        record[col],
-    ) for col = 1:ncol)
+    @inbounds prs =
+        (fields[col].name => dbf_value(fields[col].type, record[col]) for col = 1:ncol)
     return (; prs...)
 end
 
