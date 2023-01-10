@@ -6,6 +6,7 @@ import Printf, Tables, WeakRefStrings
 struct FieldDescriptor
     name::Symbol
     type::Type
+    dbf_type::Char
     length::UInt8
     ndec::UInt8
 end
@@ -74,7 +75,17 @@ function read_dbf_field(io::IO)
     field_dec = read(io, UInt8)
     skip(io, 14)  # reserved
     jltype = typemap(field_type, field_dec)
-    return FieldDescriptor(field_name, jltype, field_len, field_dec)
+    return FieldDescriptor(field_name, jltype, field_type, field_len, field_dec)
+end
+
+
+function Base.write(io::IO, fd::FieldDescriptor)
+    write(io, Vector{UInt8}(rpad(String(fd.name), 11)))
+    write(io, fd.dbf_type)
+    write(io, zeros(UInt8, 4))  # skip
+    write(io, fd.length)
+    write(io, fd.ndec)
+    write(io, zeros(UInt8, 14))  # skip
 end
 
 "Read a DBF header from a stream"
@@ -129,6 +140,24 @@ function Header(io::IO)
         fieldcolumns,
     )
 end
+
+function Base.write(io::IO, h::Header)
+    write(io, h.version)
+    date1 = UInt8(parse(Int, h.last_update[1:4]) - 1900)
+    date2 = parse(UInt8, h.last_update[5:6])
+    date3 = parse(UInt8, h.last_update[7:8])
+    write(io, date1, date2, date3, h.records, h.hsize, h.rsize)
+    write(io, zeros(UInt8, 2))  # reserved
+    write(io, h.incomplete)
+    write(io, h.encrypted)
+    write(io, zeros(UInt8, 12))  # reserved
+    write(io, h.mdx, h.lang_id)
+    write(io, zeros(UInt8, 2))  # reserved
+    for field in h.fields
+        write(io, field)
+    end
+end
+
 
 miss(x) = ifelse(x === nothing, missing, x)
 
@@ -196,7 +225,7 @@ function Table(path::AbstractString)
     end
 end
 
-"Collect all the offsets and lenghts from the header to create a StringArray"
+"Collect all the offsets and lengths from the header to create a StringArray"
 function _create_stringarray(header::Header, data::AbstractVector)
     # first make the lengths and offsets for a single record
     lengths_record = UInt32.(getfield.(header.fields, :length))
@@ -307,5 +336,12 @@ function Base.getproperty(dbf::Table, name::Symbol)
     @inbounds colarr = [dbf_value(type, str[col, i]) for i = 1:nrow]
     return colarr
 end
+
+
+function Base.write(io::IO, dbf::Table)
+    write(io, getfield(dbf, :header))
+    write(io, getfield(dbf, :data))
+end
+Base.write(path::AbstractString, dbf::Table) = open(io -> write(io, dbf), touch(path), "w")
 
 end # module

@@ -9,6 +9,10 @@ df = DataFrame(dbf)
 row, st = iterate(dbf)
 
 @testset "DBFTables" begin
+    @testset "roundtrip read/write" begin
+        write(joinpath(@__DIR__, "testwrite.dbf"), dbf)
+    end
+
     @testset "DataFrame indexing" begin
         @test size(df, 1) == 7 # records
         @test size(df, 2) == 6 # fields
