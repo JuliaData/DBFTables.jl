@@ -373,12 +373,12 @@ function write(io::IO, tbl)
     lang_id = 0x00
 
     h = Header(version, last_update, records, hsize, rsize, incomplete, encrypted, mdx, lang_id, fields, fieldcolumns)
-    out = write(io, h)
+    out = Base.write(io, h)
 
     for row in Tables.rows(tbl)
         out += write_record(io, fields, row)
     end
-    out += write(io, 0x1a)  # EOF marker
+    out += Base.write(io, 0x1a)  # EOF marker
     return out
 end
 
@@ -421,9 +421,9 @@ end
 
 function write_record(io::IO, fd::Vector{FieldDescriptor}, row)
     out = 0
-    out += write(io, ' ')  # deletion marker ' '=valid, '*'=deleted
+    out += Base.write(io, ' ')  # deletion marker ' '=valid, '*'=deleted
     for (field, val) in zip(fd, row)
-        out += write(io, _val(field, val))
+        out += Base.write(io, _val(field, val))
     end
     return out
 end

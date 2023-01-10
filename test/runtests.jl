@@ -18,6 +18,11 @@ row, st = iterate(dbf)
             @test all(a .=== b)
         end
         rm(test_dbf_write_path)
+
+        DBFTables.write(test_dbf_write_path, df)
+        t = DBFTables.Table(test_dbf_write_path)
+        df2 = DataFrame(t)
+        @test names(df) == names(df2)
     end
 
     @testset "DataFrame indexing" begin
