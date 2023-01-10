@@ -10,7 +10,11 @@ row, st = iterate(dbf)
 
 @testset "DBFTables" begin
     @testset "roundtrip read/write" begin
-        write(joinpath(@__DIR__, "testwrite.dbf"), dbf)
+        test_dbf_write_path = joinpath(@__DIR__, "testwrite.dbf")
+        write(test_dbf_write_path, dbf)
+        @test read(test_dbf_path) == read(test_dbf_write_path)
+        @test dbf == DBFTables.Table(test_dbf_write_path)
+        rm(test_dbf_write_path)
     end
 
     @testset "DataFrame indexing" begin

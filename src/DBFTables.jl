@@ -78,14 +78,17 @@ function read_dbf_field(io::IO)
     return FieldDescriptor(field_name, jltype, field_type, field_len, field_dec)
 end
 
+reserved(n) = fill(0xD, n)
 
 function Base.write(io::IO, fd::FieldDescriptor)
-    write(io, Vector{UInt8}(rpad(String(fd.name), 11)))
-    write(io, fd.dbf_type)
-    write(io, zeros(UInt8, 4))  # skip
-    write(io, fd.length)
-    write(io, fd.ndec)
-    write(io, zeros(UInt8, 14))  # skip
+    out = 0
+    out += write(io, Vector{UInt8}(rpad(String(fd.name), 10)), '\0')  # 0-10
+    out += write(io, fd.dbf_type)  # 11
+    out += write(io, reserved(4))  # 12-15
+    out += write(io, fd.length)  # 16
+    out += write(io, fd.ndec)  # 17
+    out += write(io, reserved(14))  # 18-31
+    return out
 end
 
 "Read a DBF header from a stream"
@@ -141,21 +144,31 @@ function Header(io::IO)
     )
 end
 
+
+
+# ref: https://www.clicketyclick.dk/databases/xbase/format/dbf.html
 function Base.write(io::IO, h::Header)
-    write(io, h.version)
+    out = 0
+    out += write(io, h.version)  # 0
     date1 = UInt8(parse(Int, h.last_update[1:4]) - 1900)
     date2 = parse(UInt8, h.last_update[5:6])
     date3 = parse(UInt8, h.last_update[7:8])
-    write(io, date1, date2, date3, h.records, h.hsize, h.rsize)
-    write(io, zeros(UInt8, 2))  # reserved
-    write(io, h.incomplete)
-    write(io, h.encrypted)
-    write(io, zeros(UInt8, 12))  # reserved
-    write(io, h.mdx, h.lang_id)
-    write(io, zeros(UInt8, 2))  # reserved
+    out += write(io, date1, date2, date3)  # 1-3
+    out += write(io, h.records)  # 4-7
+    out += write(io, h.hsize)  # 8-9
+    out += write(io, h.rsize)  # 10-11
+    out += write(io, reserved(2))  # 12-13 reserved
+    out += write(io, h.incomplete)  # 14
+    out += write(io, h.encrypted)  # 15
+    out += write(io, reserved(12))  # 16-19, 20-27 reserved
+    out += write(io, h.mdx)  # 28
+    out += write(io, h.lang_id)  # 29
+    out += write(io, reserved(2))  # 30-31 reserved
     for field in h.fields
-        write(io, field)
+        out += write(io, field)
     end
+    out += write(io, 0xD)
+    return out
 end
 
 
@@ -339,8 +352,10 @@ end
 
 
 function Base.write(io::IO, dbf::Table)
-    write(io, getfield(dbf, :header))
-    write(io, getfield(dbf, :data))
+    a = write(io, getfield(dbf, :header))
+    b = write(io, getfield(dbf, :data))
+    c = write(io, 0x1a)
+    return a + b + c
 end
 Base.write(path::AbstractString, dbf::Table) = open(io -> write(io, dbf), touch(path), "w")
 
