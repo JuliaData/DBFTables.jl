@@ -15,7 +15,7 @@ row, st = iterate(dbf)
         roundtrip = DBFTables.Table(test_dbf_write_path)
         for prop in propertynames(roundtrip)
             a, b = getproperty(dbf, prop), getproperty(roundtrip, prop)
-            @test all(ismissing(ai) ? ai === bi : ai == bi for (ai,bi) in zip(a,b))
+            @test all(a .=== b)
         end
         rm(test_dbf_write_path)
     end
