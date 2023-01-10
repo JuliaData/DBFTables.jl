@@ -78,7 +78,7 @@ function read_dbf_field(io::IO)
     return FieldDescriptor(field_name, jltype, field_type, field_len, field_dec)
 end
 
-reserved(n) = fill(0xD, n)
+reserved(n) = fill(0x00, n)
 
 function Base.write(io::IO, fd::FieldDescriptor)
     out = 0
