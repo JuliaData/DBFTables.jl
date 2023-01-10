@@ -399,6 +399,10 @@ function get_field_descriptors(tbl)
             # TODO: support memos.  Currently strings > 254 bytes will error
             len = UInt8(maximum(x -> length(string(x)), dct[nm]))
             dbf_type = 'C'
+        elseif type === Float64
+            dbf_type = 'O'
+            len = 0x08
+            ndec = 0x01
         elseif T <: AbstractFloat
             dbf_type = 'F'
             len = UInt8(20)
@@ -428,7 +432,7 @@ function write_record(io::IO, fd::Vector{FieldDescriptor}, row)
     return out
 end
 
-function _val(field::FieldDescriptor, val)::String
+function _val(field::FieldDescriptor, val)::Union{String, Float64}
     char = field.dbf_type
     if char == 'L'
         ismissing(val) && return "?"
@@ -439,6 +443,8 @@ function _val(field::FieldDescriptor, val)::String
         rpad(val, field.length)
     elseif char == 'D'
         Dates.format(val, "yyyymmdd")
+    elseif char == 'O'
+        val  # <-- the Float64 return value
     elseif char == 'F'
         # TODO: fix for scientific notation
         rpad(val, 20)[1:20]
