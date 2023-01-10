@@ -1,6 +1,7 @@
 module DBFTables
 
 import Printf, Tables, WeakRefStrings
+using Dates
 
 "Field/column descriptor, part of the Header"
 struct FieldDescriptor
@@ -82,12 +83,12 @@ reserved(n) = fill(0x00, n)
 
 function Base.write(io::IO, fd::FieldDescriptor)
     out = 0
-    out += write(io, Vector{UInt8}(rpad(String(fd.name), 10)), '\0')  # 0-10
-    out += write(io, fd.dbf_type)  # 11
-    out += write(io, reserved(4))  # 12-15
-    out += write(io, fd.length)  # 16
-    out += write(io, fd.ndec)  # 17
-    out += write(io, reserved(14))  # 18-31
+    out += Base.write(io, replace(rpad(String(fd.name), 11), ' ' => '\0'))  # 0-10
+    out += Base.write(io, fd.dbf_type)  # 11
+    out += Base.write(io, reserved(4))  # 12-15
+    out += Base.write(io, fd.length)  # 16
+    out += Base.write(io, fd.ndec)  # 17
+    out += Base.write(io, reserved(14))  # 18-31
     return out
 end
 
@@ -147,27 +148,27 @@ end
 
 
 # ref: https://www.clicketyclick.dk/databases/xbase/format/dbf.html
-function Base.write(io::IO, h::Header)
+function Base.Base.write(io::IO, h::Header)
     out = 0
-    out += write(io, h.version)  # 0
+    out += Base.write(io, h.version)  # 0
     date1 = UInt8(parse(Int, h.last_update[1:4]) - 1900)
     date2 = parse(UInt8, h.last_update[5:6])
     date3 = parse(UInt8, h.last_update[7:8])
-    out += write(io, date1, date2, date3)  # 1-3
-    out += write(io, h.records)  # 4-7
-    out += write(io, h.hsize)  # 8-9
-    out += write(io, h.rsize)  # 10-11
-    out += write(io, reserved(2))  # 12-13 reserved
-    out += write(io, h.incomplete)  # 14
-    out += write(io, h.encrypted)  # 15
-    out += write(io, reserved(12))  # 16-19, 20-27 reserved
-    out += write(io, h.mdx)  # 28
-    out += write(io, h.lang_id)  # 29
-    out += write(io, reserved(2))  # 30-31 reserved
+    out += Base.write(io, date1, date2, date3)  # 1-3
+    out += Base.write(io, h.records)  # 4-7
+    out += Base.write(io, h.hsize)  # 8-9
+    out += Base.write(io, h.rsize)  # 10-11
+    out += Base.write(io, reserved(2))  # 12-13 reserved
+    out += Base.write(io, h.incomplete)  # 14
+    out += Base.write(io, h.encrypted)  # 15
+    out += Base.write(io, reserved(12))  # 16-19, 20-27 reserved
+    out += Base.write(io, h.mdx)  # 28
+    out += Base.write(io, h.lang_id)  # 29
+    out += Base.write(io, reserved(2))  # 30-31 reserved
     for field in h.fields
-        out += write(io, field)
+        out += Base.write(io, field)
     end
-    out += write(io, 0xD)
+    out += Base.write(io, 0xD)
     return out
 end
 
@@ -176,6 +177,7 @@ miss(x) = ifelse(x === nothing, missing, x)
 
 "Concert a DBF entry string to a Julia value"
 function dbf_value(::Type{Bool}, str::AbstractString)
+    @info str
     char = first(str)
     if char in "YyTt"
         true
@@ -184,7 +186,7 @@ function dbf_value(::Type{Bool}, str::AbstractString)
     elseif char == '?'
         missing
     else
-        throw(ArgumentError("Unknown logical $char"))
+        throw(ArgumentError("Unknown logical entry: $(repr(char))"))
     end
 end
 
@@ -351,12 +353,101 @@ function Base.getproperty(dbf::Table, name::Symbol)
 end
 
 
-function Base.write(io::IO, dbf::Table)
-    a = write(io, getfield(dbf, :header))
-    b = write(io, getfield(dbf, :data))
-    c = write(io, 0x1a)
-    return a + b + c
+Base.write(io::IO, dbf::Table) = Base.write(io, getfield(dbf, :header), getfield(dbf, :data), 0x1a)
+Base.write(path::AbstractString, dbf::Table) = open(io -> Base.write(io, dbf), touch(path), "w")
+
+
+"Generic .dbf writer for the Tables.jl interface."
+write(path::AbstractString, tbl) = open(io -> write(io, tbl), touch(path), "w")
+
+function write(io::IO, tbl)
+    fields, records = get_field_descriptors(tbl)
+    fieldcolumns = Dict{Symbol,Int}(f.name => i for (i,f) in enumerate(fields))
+    hsize = UInt16(length(fields) * 32 + 32)
+    rsize = UInt16(sum(x -> x.length, fields)) + 1
+
+    version = 0x03
+    last_update = Dates.format(today(), "yyyymmdd")
+    incomplete = false
+    encrypted = false
+    mdx = false
+    lang_id = 0x00
+
+    h = Header(version, last_update, records, hsize, rsize, incomplete, encrypted, mdx, lang_id, fields, fieldcolumns)
+    out = write(io, h)
+
+    for row in Tables.rows(tbl)
+        out += write_record(io, fields, row)
+    end
+    out += write(io, 0x1a)  # EOF marker
+    return out
 end
-Base.write(path::AbstractString, dbf::Table) = open(io -> write(io, dbf), touch(path), "w")
+
+function get_field_descriptors(tbl)
+    fields = FieldDescriptor[]
+    dct = Tables.dictcolumntable(tbl)
+    sch = Tables.schema(dct)
+    for (nm, type) in zip(sch.names, sch.types)
+        name = Symbol(strip(replace(string(nm), '\0' => ' ')))
+        ndec = 0x0
+        len = 0x0
+        dbf_type = 'C'
+        T = Base.nonmissingtype(type)
+        if T isa Date
+            dbf_type = 'D'
+            len = 0x08
+        elseif T <: AbstractString
+            # TODO: support memos.  Currently strings > 254 bytes will error
+            len = UInt8(maximum(x -> length(string(x)), dct[nm]))
+            dbf_type = 'C'
+        elseif T <: AbstractFloat
+            dbf_type = 'F'
+            len = UInt8(20)
+            ndec = 0x01
+        elseif T <: Bool
+            dbf_type = 'L'
+            len = 0x1
+        elseif T <: Real
+            dbf_type = 'N'
+            ndec = any(x -> occursin('.', string(x)), dct[nm]) ? 0x01 : 0x00
+            len = UInt8(maximum(x -> length(string(x)), dct[nm]))
+        else
+            @warn "Field $nm has no known matching DBF data type for $T.  Data will be stored as the DBF character data type ('C')."
+            len = UInt8(maximum(x -> length(string(x)), dct[nm]))
+        end
+        push!(fields, FieldDescriptor(name, type, dbf_type, len, ndec))
+    end
+    fields, UInt32(length(first(dct)))
+end
+
+function write_record(io::IO, fd::Vector{FieldDescriptor}, row)
+    out = 0
+    out += write(io, ' ')  # deletion marker ' '=valid, '*'=deleted
+    for (field, val) in zip(fd, row)
+        out += write(io, _val(field, val))
+    end
+    return out
+end
+
+function _val(field::FieldDescriptor, val)::String
+    char = field.dbf_type
+    if char == 'L'
+        ismissing(val) && return "?"
+        val ? "T" : "F"
+    elseif ismissing(val)
+        ' ' ^ field.length
+    elseif char == 'C'
+        rpad(val, field.length)
+    elseif char == 'D'
+        Dates.format(val, "yyyymmdd")
+    elseif char == 'F'
+        # TODO: fix for scientific notation
+        rpad(val, 20)[1:20]
+    elseif char == 'N'
+        rpad(val, field.length)
+    else
+        error("Unknown DBF datatype $char.")
+    end
+end
 
 end # module
