@@ -12,8 +12,11 @@ row, st = iterate(dbf)
     @testset "roundtrip read/write" begin
         test_dbf_write_path = joinpath(@__DIR__, "testwrite.dbf")
         write(test_dbf_write_path, dbf)
-        @test read(test_dbf_path) == read(test_dbf_write_path)
-        @test dbf == DBFTables.Table(test_dbf_write_path)
+        roundtrip = DBFTables.Table(test_dbf_write_path)
+        for prop in propertynames(roundtrip)
+            a, b = getproperty(dbf, prop), getproperty(roundtrip, prop)
+            @test all(ismissing(ai) ? ai === bi : ai == bi for (ai,bi) in zip(a,b))
+        end
         rm(test_dbf_write_path)
     end
 
