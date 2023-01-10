@@ -3,3 +3,4 @@
 *.jl.mem
 Manifest.toml
 *.dbf
+*.DS_Store

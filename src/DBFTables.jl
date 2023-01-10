@@ -177,7 +177,6 @@ miss(x) = ifelse(x === nothing, missing, x)
 
 "Concert a DBF entry string to a Julia value"
 function dbf_value(::Type{Bool}, str::AbstractString)
-    @info str
     char = first(str)
     if char in "YyTt"
         true
