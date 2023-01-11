@@ -451,7 +451,7 @@ function _val(field::FieldDescriptor, val)::Union{String, Float64}
     elseif ismissing(val)
         ' ' ^ field.length
     elseif char == 'C'
-        rpad(val, field.length)
+        replace(rpad(val, field.length), !isascii => ' ')
     elseif char == 'D'
         Dates.format(val, "yyyymmdd")
     elseif char == 'O'
