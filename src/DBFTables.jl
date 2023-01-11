@@ -457,7 +457,6 @@ function _val(field::FieldDescriptor, val)::Union{String, Float64}
     elseif char == 'O'
         val  # <-- the Float64 return value
     elseif char == 'F'
-        # TODO: fix for scientific notation
         rpad(val, 20)[1:20]
     elseif char == 'N'
         rpad(val, field.length)
