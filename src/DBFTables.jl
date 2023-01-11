@@ -388,8 +388,7 @@ function get_field_descriptors(tbl)
     fields = FieldDescriptor[]
     dct = Tables.dictcolumntable(tbl)
     sch = Tables.schema(dct)
-    for (nm, type) in zip(sch.names, sch.types)
-        name = Symbol(strip(replace(string(nm), '\0' => ' ')))
+    for (name, type) in zip(sch.names, sch.types)
         ndec = 0x0
         len = 0x0
         dbf_type = 'C'
@@ -399,7 +398,7 @@ function get_field_descriptors(tbl)
             len = 0x08
         elseif T <: AbstractString
             # TODO: support memos.  Currently strings > 254 bytes will error
-            len = UInt8(maximum(x -> length(string(x)), dct[nm]))
+            len = UInt8(maximum(x -> length(string(x)), dct[name]))
             if len > 254
                 @warn "Strings will be truncated to 254 characters."
                 len = 254
@@ -421,14 +420,14 @@ function get_field_descriptors(tbl)
             len = 0x8
         elseif T <: Integer
             dbf_type = 'N'
-            len = UInt8(maximum(x -> length(string(x)), dct[nm]))
+            len = UInt8(maximum(x -> length(string(x)), dct[name]))
         elseif T <: AbstractFloat
             dbf_type = 'N'
             ndec = 0x01
-            len = UInt8(maximum(x -> length(string(x)), dct[nm]))
+            len = UInt8(maximum(x -> length(string(x)), dct[name]))
         else
-            @warn "Field $nm has no known matching DBF data type for $T.  Data will be stored as the DBF character data type ('C')."
-            len = UInt8(maximum(x -> length(string(x)), dct[nm]))
+            @warn "Field $name has no known matching DBF data type for $T.  Data will be stored as the DBF character data type ('C')."
+            len = UInt8(maximum(x -> length(string(x)), dct[name]))
         end
         push!(fields, FieldDescriptor(name, type, dbf_type, len, ndec))
     end
