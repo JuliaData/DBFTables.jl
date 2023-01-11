@@ -2,6 +2,7 @@ using DBFTables
 using Test
 using Tables
 using DataFrames
+using Dates
 
 test_dbf_path = joinpath(@__DIR__, "test.dbf")
 dbf = DBFTables.Table(test_dbf_path)
@@ -9,27 +10,36 @@ df = DataFrame(dbf)
 row, st = iterate(dbf)
 
 @testset "DBFTables" begin
-    @testset "roundtrip read/write" begin
-        test_dbf_write_path = joinpath(@__DIR__, "testwrite.dbf")
-        write(test_dbf_write_path, dbf)
-        roundtrip = DBFTables.Table(test_dbf_write_path)
-        for prop in propertynames(roundtrip)
-            a, b = getproperty(dbf, prop), getproperty(roundtrip, prop)
-            @test all(a .=== b)
+    @testset "Writing" begin
+        tables_equal(tbl1, tbl2) = all(zip(Tables.columns(tbl1), Tables.columns(tbl2))) do (t1, t2)
+            all(ismissing(a) ? ismissing(b) : a == b for (a,b) in zip(t1,t2))
         end
-        rm(test_dbf_write_path)
+        function _roundtrip(table)
+            file = joinpath(tempdir(), "test.dbf")
+            DBFTables.write(file, table)
+            table2 = DBFTables.Table(file)
+        end
+        roundtrip(table) = tables_equal(DataFrame(table), DataFrame(_roundtrip(table)))
+        @test roundtrip(df)
+        @test roundtrip(dbf)
+        @test roundtrip([(x=Float32(1), y=1), (x=Float32(2), y=2), (x=missing, y=3)])
+        @test roundtrip([(x=true, y="test"), (x=missing, y=missing)])
+        @test roundtrip([(x=today(), y=missing), (x=missing, y=today())])
 
-        DBFTables.write(test_dbf_write_path, df)
-        t = DBFTables.Table(test_dbf_write_path)
-        df2 = DataFrame(t)
-        @test names(df) == names(df2)
+        @test_warn "Data will be stored as the DBF character data type" DBFTables.write(tempname(), [(; x = rand(10))])
+
+        # Base.write for DBFTables.Table
+        file = joinpath(tempdir(), "test.dbf")
+        write(file, dbf)
+        dbf2 = DBFTables.Table(file)
+        @test tables_equal(dbf, dbf2)
     end
 
     @testset "DataFrame indexing" begin
         @test size(df, 1) == 7 # records
         @test size(df, 2) == 6 # fields
         @test df[2, :CHAR] == "John"
-        @test df[1, :DATE] == "19900102"
+        @test df[1, :DATE] == Date("19900102", dateformat"yyyymmdd")
         @test df[3, :BOOL] == false
         @test df[1, :FLOAT] == 10.21
         @test df[2, :NUMERIC] == 12.21
@@ -46,7 +56,7 @@ row, st = iterate(dbf)
     @testset "header" begin
         h = DBFTables.Header(open(test_dbf_path))
         @test h.version == 3
-        @test h.last_update == "20140806"
+        @test h.last_update == Date("20140806", dateformat"yyyymmdd")
         @test h.records == 7
         @test length(h.fields) == 6
     end
@@ -55,18 +65,18 @@ row, st = iterate(dbf)
         @test sprint(show, row) === sprint(show, NamedTuple(row))
         # use replace to update to julia 1.4 union printing
         @test replace(sprint(show, dbf), r"\} +" => "}") ===
-              "DBFTables.Table with 7 rows and 6 columns\nTables.Schema:\n :CHAR     Union{Missing, String}\n :DATE     Union{Missing, String}\n :BOOL     Union{Missing, Bool}\n :FLOAT    Union{Missing, Float64}\n :NUMERIC  Union{Missing, Float64}\n :INTEGER  Union{Missing, $Int}\n"
+              "DBFTables.Table with 7 rows and 6 columns\nTables.Schema:\n :CHAR     Union{Missing, String}\n :DATE     Union{Missing, Date}\n :BOOL     Union{Missing, Bool}\n :FLOAT    Union{Missing, Float64}\n :NUMERIC  Union{Missing, Float64}\n :INTEGER  Union{Missing, $Int}\n"
     end
 
     @testset "iterate" begin
         @test st === 2
         @test haskey(row, :CHAR)
         @test row.CHAR === "Bob"
-        @test row[2] === "19900102"
+        @test row[2] === Date("19900102", dateformat"yyyymmdd")
         @test_throws ArgumentError row.nonexistent_field
         firstrow = (
             CHAR = "Bob",
-            DATE = "19900102",
+            DATE = Date("19900102", dateformat"yyyymmdd"),
             BOOL = false,
             FLOAT = 10.21,
             NUMERIC = 11.21,

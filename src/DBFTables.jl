@@ -1,6 +1,6 @@
 module DBFTables
 
-import Printf, Tables, WeakRefStrings
+import Tables, WeakRefStrings
 using Dates
 
 "Field/column descriptor, part of the Header"
@@ -15,7 +15,7 @@ end
 "DBF header, which also holds all field definitions"
 struct Header
     version::UInt8
-    last_update::String
+    last_update::Date
     records::UInt32
     hsize::UInt16
     rsize::UInt16
@@ -47,7 +47,7 @@ function typemap(fld::Char, ndec::UInt8)
     if fld == 'C'
         rt = String
     elseif fld == 'D'
-        rt = String
+        rt = Date
     elseif fld == 'N'
         if ndec > 0
             rt = Float64
@@ -95,10 +95,10 @@ end
 "Read a DBF header from a stream"
 function Header(io::IO)
     ver = read(io, UInt8)
-    date1 = read(io, UInt8)
-    date2 = read(io, UInt8)
-    date3 = read(io, UInt8)
-    last_update = Printf.@sprintf("%4d%02d%02d", date1 + 1900, date2, date3)
+    yy = read(io, UInt8)
+    mm = read(io, UInt8)
+    dd = read(io, UInt8)
+    last_update = Date(yy + 1900, mm, dd)
     records = read(io, UInt32)
     hsize = read(io, UInt16)
     rsize = read(io, UInt16)
@@ -151,10 +151,10 @@ end
 function Base.Base.write(io::IO, h::Header)
     out = 0
     out += Base.write(io, h.version)  # 0
-    date1 = UInt8(parse(Int, h.last_update[1:4]) - 1900)
-    date2 = parse(UInt8, h.last_update[5:6])
-    date3 = parse(UInt8, h.last_update[7:8])
-    out += Base.write(io, date1, date2, date3)  # 1-3
+    yy = UInt8(year(h.last_update) - 1900)
+    mm = UInt8(month(h.last_update))
+    dd = UInt8(day(h.last_update))
+    out += Base.write(io, yy, mm, dd)  # 1-3
     out += Base.write(io, h.records)  # 4-7
     out += Base.write(io, h.hsize)  # 8-9
     out += Base.write(io, h.rsize)  # 10-11
@@ -188,6 +188,8 @@ function dbf_value(::Type{Bool}, str::AbstractString)
         throw(ArgumentError("Unknown logical entry: $(repr(char))"))
     end
 end
+
+dbf_value(::Type{Date}, str::AbstractString) = all(isspace, str) ? missing : Date(str, dateformat"yyyymmdd")
 
 dbf_value(T::Union{Type{Int},Type{Float64}}, str::AbstractString) = miss(tryparse(T, str))
 # String to avoid returning SubString{String}
@@ -366,7 +368,7 @@ function write(io::IO, tbl)
     rsize = UInt16(sum(x -> x.length, fields)) + 1
 
     version = 0x03
-    last_update = Dates.format(today(), "yyyymmdd")
+    last_update = today()
     incomplete = false
     encrypted = false
     mdx = false
@@ -398,6 +400,10 @@ function get_field_descriptors(tbl)
         elseif T <: AbstractString
             # TODO: support memos.  Currently strings > 254 bytes will error
             len = UInt8(maximum(x -> length(string(x)), dct[nm]))
+            if len > 254
+                @warn "Strings will be truncated to 254 characters."
+                len = 254
+            end
             dbf_type = 'C'
         elseif type === Float64
             dbf_type = 'O'
@@ -410,6 +416,9 @@ function get_field_descriptors(tbl)
         elseif T <: Bool
             dbf_type = 'L'
             len = 0x1
+        elseif T <: Date
+            dbf_type = 'D'
+            len = 0x8
         elseif T <: Real
             dbf_type = 'N'
             ndec = any(x -> occursin('.', string(x)), dct[nm]) ? 0x01 : 0x00
