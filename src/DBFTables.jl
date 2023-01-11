@@ -419,9 +419,12 @@ function get_field_descriptors(tbl)
         elseif T <: Date
             dbf_type = 'D'
             len = 0x8
-        elseif T <: Real
+        elseif T <: Integer
             dbf_type = 'N'
-            ndec = any(x -> occursin('.', string(x)), dct[nm]) ? 0x01 : 0x00
+            len = UInt8(maximum(x -> length(string(x)), dct[nm]))
+        elseif T <: AbstractFloat
+            dbf_type = 'N'
+            ndec = 0x01
             len = UInt8(maximum(x -> length(string(x)), dct[nm]))
         else
             @warn "Field $nm has no known matching DBF data type for $T.  Data will be stored as the DBF character data type ('C')."

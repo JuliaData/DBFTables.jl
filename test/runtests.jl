@@ -25,6 +25,7 @@ row, st = iterate(dbf)
         @test roundtrip([(x=Float32(1), y=1), (x=Float32(2), y=2), (x=missing, y=3)])
         @test roundtrip([(x=true, y="test"), (x=missing, y=missing)])
         @test roundtrip([(x=today(), y=missing), (x=missing, y=today())])
+        @test roundtrip([(; x=1.0), (;x=missing)])
 
         @test_warn "Data will be stored as the DBF character data type" DBFTables.write(tempname(), [(; x = rand(10))])
 
