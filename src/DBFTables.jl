@@ -362,7 +362,8 @@ Base.write(path::AbstractString, dbf::Table) = open(io -> Base.write(io, dbf), t
 write(path::AbstractString, tbl) = open(io -> write(io, tbl), touch(path), "w")
 
 function write(io::IO, tbl)
-    fields, records = get_field_descriptors(tbl)
+    dct = Tables.dictcolumntable(tbl)
+    fields, records = get_field_descriptors(dct)
     fieldcolumns = Dict{Symbol,Int}(f.name => i for (i,f) in enumerate(fields))
     hsize = UInt16(length(fields) * 32 + 32)
     rsize = UInt16(sum(x -> x.length, fields)) + 1
@@ -377,16 +378,15 @@ function write(io::IO, tbl)
     h = Header(version, last_update, records, hsize, rsize, incomplete, encrypted, mdx, lang_id, fields, fieldcolumns)
     out = Base.write(io, h)
 
-    for row in Tables.rows(tbl)
+    for row in Tables.rows(dct)
         out += write_record(io, fields, row)
     end
     out += Base.write(io, 0x1a)  # EOF marker
     return out
 end
 
-function get_field_descriptors(tbl)
+function get_field_descriptors(dct)
     fields = FieldDescriptor[]
-    dct = Tables.dictcolumntable(tbl)
     sch = Tables.schema(dct)
     for (name, type) in zip(sch.names, sch.types)
         ndec = 0x0
@@ -420,10 +420,6 @@ function get_field_descriptors(tbl)
             len = 0x8
         elseif T <: Integer
             dbf_type = 'N'
-            len = UInt8(maximum(x -> length(string(x)), dct[name]))
-        elseif T <: AbstractFloat
-            dbf_type = 'N'
-            ndec = 0x01
             len = UInt8(maximum(x -> length(string(x)), dct[name]))
         else
             @warn "Field $name has no known matching DBF data type for $T.  Data will be stored as the DBF character data type ('C')."
