@@ -12,6 +12,35 @@ struct FieldDescriptor
     ndec::UInt8
 end
 
+"Create FieldDescriptor from a column in a Tables.jl table."
+function FieldDescriptor(name::Symbol, data::AbstractVector)
+    T = Base.nonmissingtype(eltype(data))
+    char = dbf_type(T)
+    ndec = 0x00
+    itr = skipmissing(data)
+    if char === 'D'
+        len = 0x08
+    elseif T === Union{}  # data is only missings
+        len = 0x01
+    elseif char === 'C'
+        width = T <: AbstractString ? maximum(length, itr) : maximum(x -> length(string(x)), itr)
+        if width > 254
+            @warn "Due to DBF limitations, strings in field $name will be truncated to 254 characters."
+            len = UInt8(254)
+        else
+            len = UInt8(width)
+        end
+    elseif char === 'N'
+        len = UInt8(20)
+        ndec = T <: AbstractFloat ? 0x1 : 0x0
+    elseif char === 'L'
+        len = 0x1
+    else
+        error("This shouldn't be reachable.  Unknown DBF type code: '$char'.")
+    end
+    FieldDescriptor(name, T, char, len, ndec)
+end
+
 "DBF header, which also holds all field definitions"
 struct Header
     version::UInt8
@@ -40,30 +69,103 @@ struct Row <: Tables.AbstractRow
     row::Int
 end
 
-"Convert DBF data type characters to Julia types"
-function typemap(fld::Char, ndec::UInt8)
-    # https://www.clicketyclick.dk/databases/xbase/format/data_types.html
-    rt = Nothing
-    if fld == 'C'
-        rt = String
-    elseif fld == 'D'
-        rt = Date
-    elseif fld == 'N'
-        if ndec > 0
-            rt = Float64
-        else
-            rt = Int
-        end
-    elseif fld == 'F' || fld == 'O'
-        rt = Float64
-    elseif fld == 'I' || fld == '+'
-        rt = Int
-    elseif fld == 'L'
-        rt = Bool
-    else
-        throw(ArgumentError("Unknown record type $fld"))
+#-----------------------------------------------------------------------# conversions: Julia-to-DBF
+# These are the only types DBFTables.jl will use to save data as.
+"Get the DBF type code from the Julia type.  Assumes `Base.nonmissingtype(T)` is the input."
+dbf_type(::Type{<:AbstractString}) = 'C'
+dbf_type(::Type{Bool}) = 'L'
+dbf_type(::Type{<:Integer}) = 'N'
+dbf_type(::Type{<:AbstractFloat}) = 'N'
+dbf_type(::Type{Date}) = 'D'
+dbf_type(::Type{Union{}}) = 'C'
+function dbf_type(::Type{T}) where {T}
+    @warn "No DBF type associated with Julia type $T.  Data will be saved as `string(x)`."
+    'C'
+end
+
+dbf_value(field::FieldDescriptor, val) = dbf_value(Val(field.dbf_type), field.length, val)
+
+# String (or any other type that gets mapped to 'C')
+function dbf_value(::Val{'C'}, len::UInt8, x)
+    out = replace(rpad(x, len), !isascii => ' ')
+    length(out) > 254 ? out[1:254] : out
+end
+dbf_value(::Val{'C'}, len::UInt8, ::Missing) = ' ' ^ len
+
+# Bool
+dbf_value(::Val{'L'}, ::UInt8, x::Bool) = x ? 'T' : 'F'
+dbf_value(::Val{'L'}, ::UInt8, ::Missing) = '?'
+
+# Integer & AbstractFloat
+function dbf_value(::Val{'N'}, ::UInt8, x::Union{AbstractFloat, Integer})
+    maxval = 99999999999999999999
+    abs(x) > maxval && @warn "Due to DBF limitations, a float will be clamped to fit in 20 characters."
+    rpad(clamp(x, -maxval, maxval), 20)
+end
+dbf_value(::Val{'N'}, ::UInt8, ::Missing) = ' ' ^ 20
+
+# Date
+dbf_value(::Val{'D'}, ::UInt8, x::Date) = Dates.format(x, "yyyymmdd")
+dbf_value(::Val{'D'}, ::UInt8, ::Missing) = ' ' ^ 8
+
+dbf_value(::Val, ::UInt8, x) = error("No known conversion from Julia to DBF: $x.")
+
+#-----------------------------------------------------------------------# conversions: DBF-to-Julia
+"Get the Julia type from the DBF type code and the decimal count"
+julia_type(::Val{'C'}, ndec::UInt8) = String
+julia_type(::Val{'D'}, ndec::UInt8) = Date
+julia_type(::Val{'N'}, ndec::UInt8) = ndec > 0 ? Float64 : Int
+julia_type(::Val{'F'}, ndec::UInt8) = Float64
+julia_type(::Val{'O'}, ndec::UInt8) = Float64
+julia_type(::Val{'I'}, ndec::UInt8) = Int32
+julia_type(::Val{'+'}, ndec::UInt8) = Int64
+julia_type(::Val{'L'}, ndec::UInt8) = Bool
+function julia_type(::Val{T}, ndec::UInt8) where {T}
+    @warn "Unknown DBF type code '$T'.  Data will be loaded as `String"
+    String
+end
+
+
+julia_value(o::FieldDescriptor, s::AbstractString) = julia_value(o.type, Val(o.dbf_type), s::AbstractString)
+
+function julia_value(::Type{String}, ::Val{'C'}, s::AbstractString)
+    s2 = rstrip(s)
+    isempty(s2) ? missing : String(s2)
+end
+function julia_value(::Type{Date}, ::Val{'D'}, s::AbstractString)
+    all(isspace, s) ? missing : Date(s, dateformat"yyyymmdd")
+end
+julia_value(::Type{Int}, ::Val{'N'}, s::AbstractString) = miss(tryparse(Int, s))
+julia_value(::Type{Float64}, ::Val{'N'}, s::AbstractString) = miss(tryparse(Float64, s))
+julia_value(::Type{Float64}, ::Val{'F'}, s::AbstractString) = miss(tryparse(Float64, s))
+# 'O', 'I', and '+' do not use string representations.
+function julia_value(::Type{Float64}, ::Val{'O'}, s::AbstractString)
+    try
+        only(reinterpret(Float64, Vector{UInt8}(s)))
+    catch
+        missing
     end
-    return rt
+end
+function julia_value(::Type{Int32}, ::Val{'I'}, s::AbstractString)
+    try
+        only(reinterpret(Int32, Vector{UInt8}(s)))
+    catch
+        missing
+    end
+end
+function julia_value(::Type{Int64}, ::Val{'+'}, s::AbstractString)
+    try
+        only(reinterpret(Int64, Vector{UInt8}(s)))
+    catch
+        missing
+    end
+end
+function julia_value(::Type{Bool}, ::Val{'L'}, s::AbstractString)
+    char = only(s)
+    char === '?' ? missing :
+        char in "YyTt" ? true :
+        char in "NnFf" ? false :
+        error("Unknown logical entry for dbf type code 'L': '$char'.")
 end
 
 "Read a field descriptor from the stream, and create a FieldDescriptor struct"
@@ -75,7 +177,7 @@ function read_dbf_field(io::IO)
     field_len = read(io, UInt8)
     field_dec = read(io, UInt8)
     skip(io, 14)  # reserved
-    jltype = typemap(field_type, field_dec)
+    jltype = julia_type(Val(field_type), field_dec)
     return FieldDescriptor(field_name, jltype, field_type, field_len, field_dec)
 end
 
@@ -175,35 +277,6 @@ end
 
 miss(x) = ifelse(x === nothing, missing, x)
 
-"Concert a DBF entry string to a Julia value"
-function dbf_value(::Type{Bool}, str::AbstractString)
-    char = first(str)
-    if char in "YyTt"
-        true
-    elseif char in "NnFf"
-        false
-    elseif char == '?'
-        missing
-    else
-        throw(ArgumentError("Unknown logical entry: $(repr(char))"))
-    end
-end
-
-dbf_value(::Type{Date}, str::AbstractString) = all(isspace, str) ? missing : Date(str, dateformat"yyyymmdd")
-
-dbf_value(T::Union{Type{Int},Type{Float64}}, str::AbstractString) = miss(tryparse(T, str))
-# String to avoid returning SubString{String}
-function dbf_value(::Type{String}, str::AbstractString)
-    stripped = rstrip(str)
-    if isempty(stripped)
-        # return missing rather than ""
-        return missing
-    else
-        return String(stripped)
-    end
-end
-dbf_value(::Type{Nothing}, ::AbstractString) = missing
-
 # define get functions using getfield since we overload getproperty
 "Access the header of a DBF Table"
 getheader(dbf::Table) = getfield(dbf, :header)
@@ -265,8 +338,7 @@ function Base.NamedTuple(row::Row)
     ncol = length(fields)
     rowidx = getrow(row)
     @inbounds record = @view str[:, rowidx]
-    @inbounds prs =
-        (fields[col].name => dbf_value(fields[col].type, record[col]) for col = 1:ncol)
+    @inbounds prs = (fields[col].name => julia_value(fields[col], record[col]) for col = 1:ncol)
     return (; prs...)
 end
 
@@ -310,17 +382,17 @@ function Tables.getcolumn(row::Row, name::Symbol)
     str = getstrings(dbf)
     colidx = get(header.fieldcolumns, name, nothing)
     colidx === nothing && throw(ArgumentError("Column not present: $name"))
-    type = @inbounds getfields(dbf)[colidx].type
+    field = @inbounds getfields(dbf)[colidx]
     rowidx = getrow(row)
-    return @inbounds dbf_value(type, str[colidx, rowidx])
+    return @inbounds julia_value(field, str[colidx, rowidx])
 end
 
 function Tables.getcolumn(row::Row, i::Int)
     dbf = gettable(row)
     str = getstrings(dbf)
-    type = getfields(dbf)[i].type
+    field = getfields(dbf)[i]
     rowidx = getrow(row)
-    return @inbounds dbf_value(type, str[i, rowidx])
+    return @inbounds julia_value(field, str[i, rowidx])
 end
 
 Tables.istable(::Type{Table}) = true
@@ -347,9 +419,9 @@ function Base.getproperty(dbf::Table, name::Symbol)
     col = get(header.fieldcolumns, name, nothing)
     col === nothing && throw(ArgumentError("Column not present: $name"))
     nrow = header.records
-    @inbounds type = getfields(dbf)[col].type
+    @inbounds field = getfields(dbf)[col]
     str = getstrings(dbf)
-    @inbounds colarr = [dbf_value(type, str[col, i]) for i = 1:nrow]
+    @inbounds colarr = [julia_value(field, str[col, i]) for i = 1:nrow]
     return colarr
 end
 
@@ -363,7 +435,8 @@ write(path::AbstractString, tbl) = open(io -> write(io, tbl), touch(path), "w")
 
 function write(io::IO, tbl)
     dct = Tables.dictcolumntable(tbl)
-    fields, records = get_field_descriptors(dct)
+    fields = [FieldDescriptor(k, v) for (k,v) in pairs(getfield(dct, :values))]
+    records = UInt32(length(first(dct)))
     fieldcolumns = Dict{Symbol,Int}(f.name => i for (i,f) in enumerate(fields))
     hsize = UInt16(length(fields) * 32 + 32)
     rsize = UInt16(sum(x -> x.length, fields)) + 1
@@ -385,80 +458,15 @@ function write(io::IO, tbl)
     return out
 end
 
-function get_field_descriptors(dct)
-    fields = FieldDescriptor[]
-    sch = Tables.schema(dct)
-    for (name, type) in zip(sch.names, sch.types)
-        ndec = 0x0
-        len = 0x0
-        dbf_type = 'C'
-        T = Base.nonmissingtype(type)
-        if T isa Date
-            dbf_type = 'D'
-            len = 0x08
-        elseif T <: AbstractString
-            # TODO: support memos.  Currently strings > 254 bytes will error
-            len = UInt8(maximum(x -> length(string(x)), dct[name]))
-            if len > 254
-                @warn "Strings will be truncated to 254 characters."
-                len = 254
-            end
-            dbf_type = 'C'
-        elseif type === Float64
-            dbf_type = 'O'
-            len = 0x08
-            ndec = 0x01
-        elseif T <: AbstractFloat
-            dbf_type = 'F'
-            len = UInt8(20)
-            ndec = 0x01
-        elseif T <: Bool
-            dbf_type = 'L'
-            len = 0x1
-        elseif T <: Date
-            dbf_type = 'D'
-            len = 0x8
-        elseif T <: Integer
-            dbf_type = 'N'
-            len = UInt8(maximum(x -> length(string(x)), dct[name]))
-        else
-            @warn "Field $name has no known matching DBF data type for $T.  Data will be stored as the DBF character data type ('C')."
-            len = UInt8(maximum(x -> length(string(x)), dct[name]))
-        end
-        push!(fields, FieldDescriptor(name, type, dbf_type, len, ndec))
-    end
-    fields, UInt32(length(first(dct)))
-end
-
 function write_record(io::IO, fd::Vector{FieldDescriptor}, row)
     out = 0
     out += Base.write(io, ' ')  # deletion marker ' '=valid, '*'=deleted
     for (field, val) in zip(fd, row)
-        out += Base.write(io, _val(field, val))
+        out += Base.write(io, dbf_value(field, val))
     end
     return out
 end
 
-function _val(field::FieldDescriptor, val)::Union{String, Float64}
-    char = field.dbf_type
-    if char == 'L'
-        ismissing(val) && return "?"
-        val ? "T" : "F"
-    elseif ismissing(val)
-        ' ' ^ field.length
-    elseif char == 'C'
-        replace(rpad(val, field.length), !isascii => ' ')
-    elseif char == 'D'
-        Dates.format(val, "yyyymmdd")
-    elseif char == 'O'
-        val  # <-- the Float64 return value
-    elseif char == 'F'
-        rpad(val, 20)[1:20]
-    elseif char == 'N'
-        rpad(val, field.length)
-    else
-        error("Unknown DBF datatype $char.")
-    end
-end
+
 
 end # module
