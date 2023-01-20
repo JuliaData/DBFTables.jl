@@ -98,9 +98,10 @@ dbf_value(::Val{'L'}, ::UInt8, ::Missing) = '?'
 
 # Integer & AbstractFloat
 function dbf_value(::Val{'N'}, ::UInt8, x::Union{AbstractFloat, Integer})
+    minval = -9999999999999999999
     maxval = 99999999999999999999
-    abs(x) > maxval && @warn "Due to DBF limitations, a float will be clamped to fit in 20 characters."
-    rpad(clamp(x, -maxval, maxval), 20)
+    minval ≤ x ≤ maxval && @warn "Due to DBF limitations, a float will be clamped to fit in 20 characters."
+    rpad(clamp(x, minval, maxval), 20)
 end
 dbf_value(::Val{'N'}, ::UInt8, ::Missing) = ' ' ^ 20
 
