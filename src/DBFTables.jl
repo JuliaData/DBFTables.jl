@@ -129,7 +129,7 @@ end
 julia_value(o::FieldDescriptor, s::AbstractString) = julia_value(o.type, Val(o.dbf_type), s::AbstractString)
 
 function julia_value(::Type{String}, ::Val{'C'}, s::AbstractString)
-    s2 = rstrip(s)
+    s2 = strip(s)
     isempty(s2) ? missing : String(s2)
 end
 function julia_value(::Type{Date}, ::Val{'D'}, s::AbstractString)
