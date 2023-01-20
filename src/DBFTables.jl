@@ -108,7 +108,7 @@ dbf_value(::Val{'N'}, ::UInt8, ::Missing) = ' ' ^ 20
 dbf_value(::Val{'D'}, ::UInt8, x::Date) = Dates.format(x, "yyyymmdd")
 dbf_value(::Val{'D'}, ::UInt8, ::Missing) = ' ' ^ 8
 
-dbf_value(::Val, ::UInt8, x) = error("No known conversion from Julia to DBF: $x.")
+dbf_value(::Val, ::UInt8, x) = error("This should be unreachable.  No known conversion from Julia to DBF: $x.")
 
 #-----------------------------------------------------------------------# conversions: DBF-to-Julia
 "Get the Julia type from the DBF type code and the decimal count"
