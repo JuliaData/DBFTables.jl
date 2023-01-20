@@ -87,7 +87,7 @@ dbf_value(field::FieldDescriptor, val) = dbf_value(Val(field.dbf_type), field.le
 
 # String (or any other type that gets mapped to 'C')
 function dbf_value(::Val{'C'}, len::UInt8, x)
-    out = replace(rpad(x, len), !isascii => ' ')
+    out = replace(rpad(x, len), !isascii => x -> '_' ^ textwidth(x))
     length(out) > 254 ? out[1:254] : out
 end
 dbf_value(::Val{'C'}, len::UInt8, ::Missing) = ' ' ^ len
