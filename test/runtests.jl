@@ -28,7 +28,8 @@ row, st = iterate(dbf)
         @test roundtrip([(; x=1.0), (;x=missing)])
         @test roundtrip([(; x=missing), (; x=missing)])
 
-        @test_warn "Data will be stored as the DBF character data type" DBFTables.write(tempname(), [(; x = rand(10))])
+        @test_warn "No DBF type" DBFTables.write(tempname(), [(; x = rand(1))])
+        @test_warn "truncated to 254 characters" DBFTables.write(tempname(), [(; x = rand(999))])
 
         # Base.write for DBFTables.Table
         file = joinpath(tempdir(), "test.dbf")
