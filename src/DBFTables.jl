@@ -121,6 +121,7 @@ julia_type(::Val{'O'}, ndec::UInt8) = Float64
 julia_type(::Val{'I'}, ndec::UInt8) = Int32
 julia_type(::Val{'+'}, ndec::UInt8) = Int64
 julia_type(::Val{'L'}, ndec::UInt8) = Bool
+julia_type(::Val{'M'}, ndec::UInt8) = String 
 function julia_type(::Val{T}, ndec::UInt8) where {T}
     @warn "Unknown DBF type code '$T'.  Data will be loaded as `String"
     String
@@ -129,10 +130,13 @@ end
 
 julia_value(o::FieldDescriptor, s::AbstractString) = julia_value(o.type, Val(o.dbf_type), s::AbstractString)
 
-function julia_value(::Type{String}, ::Val{'C'}, s::AbstractString)
+function julia_value_string(s::AbstractString)
     s2 = strip(s)
     isempty(s2) ? missing : String(s2)
 end
+
+julia_value(::Type{String}, ::Val{'C'}, s::AbstractString) = julia_value_string(s)
+julia_value(::Type{String}, ::Val{'M'}, s::AbstractString) = julia_value_string(s)
 function julia_value(::Type{Date}, ::Val{'D'}, s::AbstractString)
     all(isspace, s) ? missing : Date(s, dateformat"yyyymmdd")
 end
@@ -163,10 +167,13 @@ function julia_value(::Type{Int64}, ::Val{'+'}, s::AbstractString)
 end
 function julia_value(::Type{Bool}, ::Val{'L'}, s::AbstractString)
     char = only(s)
-    char === '?' ? missing :
-        char in "YyTt" ? true :
-        char in "NnFf" ? false :
-        error("Unknown logical entry for dbf type code 'L': '$char'.")
+    if char in "YyTt"
+        return true
+    elseif char in "NnFf"
+        return false
+    else 
+        return missing
+    end
 end
 
 "Read a field descriptor from the stream, and create a FieldDescriptor struct"
