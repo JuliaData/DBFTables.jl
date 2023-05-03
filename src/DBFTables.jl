@@ -2,6 +2,7 @@ module DBFTables
 
 import Tables, WeakRefStrings
 using Dates
+using Printf: @sprintf
 
 "Field/column descriptor, part of the Header"
 struct FieldDescriptor
@@ -96,12 +97,25 @@ dbf_value(::Val{'C'}, len::UInt8, ::Missing) = ' ' ^ len
 dbf_value(::Val{'L'}, ::UInt8, x::Bool) = x ? 'T' : 'F'
 dbf_value(::Val{'L'}, ::UInt8, ::Missing) = '?'
 
-# Integer & AbstractFloat
-function dbf_value(::Val{'N'}, ::UInt8, x::Union{AbstractFloat, Integer})
-    minval = -9999999999999999999
-    maxval = 99999999999999999999
-    minval ≤ x ≤ maxval && @warn "Due to DBF limitations, a float will be clamped to fit in 20 characters."
-    rpad(clamp(x, minval, maxval), 20)
+# Integer
+function dbf_value(::Val{'N'}, ::UInt8, x::Integer)
+    s = rpad(x, 20)
+    length(s) > 20 ? error("The DBF format cannot save integers >20 characters.") : s
+end
+
+# AbstractFloat
+function dbf_value(::Val{'N'}, ::UInt8, x::AbstractFloat)
+    s = rpad(x, 20)
+    length(s) == 20 && return s
+    # Force into scientific notation with 20 decimal places
+    s2 = @sprintf "%.20e" x
+    i = findfirst('e', s2)
+    s_end = replace(s2[i:end], '+' => "")
+    len  = length(s_end)
+    n = 20 - len
+    out = s2[1:n] * s_end
+    @warn "A DBF limitation has reduced the precision of $x by $(length(s) - 20) digits."
+    return out
 end
 dbf_value(::Val{'N'}, ::UInt8, ::Missing) = ' ' ^ 20
 
@@ -121,7 +135,7 @@ julia_type(::Val{'O'}, ndec::UInt8) = Float64
 julia_type(::Val{'I'}, ndec::UInt8) = Int32
 julia_type(::Val{'+'}, ndec::UInt8) = Int64
 julia_type(::Val{'L'}, ndec::UInt8) = Bool
-julia_type(::Val{'M'}, ndec::UInt8) = String 
+julia_type(::Val{'M'}, ndec::UInt8) = String
 function julia_type(::Val{T}, ndec::UInt8) where {T}
     @warn "Unknown DBF type code '$T'.  Data will be loaded as `String"
     String
@@ -171,7 +185,7 @@ function julia_value(::Type{Bool}, ::Val{'L'}, s::AbstractString)
         return true
     elseif char in "NnFf"
         return false
-    else 
+    else
         return missing
     end
 end
