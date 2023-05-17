@@ -272,7 +272,7 @@ end
 
 
 # ref: https://www.clicketyclick.dk/databases/xbase/format/dbf.html
-function Base.Base.write(io::IO, h::Header)
+function Base.write(io::IO, h::Header)
     out = 0
     out += Base.write(io, h.version)  # 0
     yy = UInt8(year(h.last_update) - 1900)
