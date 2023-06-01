@@ -118,4 +118,16 @@ row, st = iterate(dbf)
         @test !DBFTables.isdeleted(dbf, 3)
     end
 
+    @testset "Numeric 20-character Limit Nonsense" begin
+        big = BigInt(99999_99999_99999_99999)
+        @test DBFTables.dbf_value(Val('N'), 0x01, big) == string(big)
+        @test_throws Exception DBFTables.dbf_value(Val('N'), 0x01, big + 1)
+
+        negbig = -BigInt(99999_99999_99999_9999)  # one less digit for the minus sign
+        @test DBFTables.dbf_value(Val('N'), 0x01, negbig) == string(negbig)
+        @test_throws Exception DBFTables.dbf_value(Val('N'), 0x01, negbig - 1)
+
+        @test_warn r"DBF limitation" DBFTables.dbf_value(Val('N'), 0x01, prevfloat(Inf))
+        @test_warn r"DBF limitation" DBFTables.dbf_value(Val('N'), 0x01, nextfloat(-Inf))
+    end
 end  # testset "DBFTables"
