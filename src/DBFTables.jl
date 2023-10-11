@@ -193,7 +193,7 @@ end
 "Read a field descriptor from the stream, and create a FieldDescriptor struct"
 function read_dbf_field(io::IO)
     field_name_raw = String(read!(io, Vector{UInt8}(undef, 11)))
-    field_name = Symbol(strip(replace(field_name_raw, '\0' => ' ')))
+    field_name = Symbol(split(field_name_raw, '\0')[1])
     field_type = read(io, Char)
     skip(io, 4)  # skip
     field_len = read(io, UInt8)
