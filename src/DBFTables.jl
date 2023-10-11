@@ -324,6 +324,11 @@ or to retrieve columns like `dbf.fieldname`.
 function Table(io::IO)
     header = Header(io)
     # consider using mmap here for big dbf files
+
+    # Make sure data is read at the right position
+    bytes_to_skip = header.hsize - position(io)
+    bytes_to_skip > 0 && skip(io, bytes_to_skip)
+    
     data = Vector{UInt8}(undef, header.rsize * header.records)
     read!(io, data)
     strings = _create_stringarray(header, data)
@@ -460,7 +465,7 @@ function write(io::IO, tbl)
     fields = [FieldDescriptor(k, v) for (k,v) in pairs(getfield(dct, :values))]
     records = UInt32(length(first(dct)))
     fieldcolumns = Dict{Symbol,Int}(f.name => i for (i,f) in enumerate(fields))
-    hsize = UInt16(length(fields) * 32 + 32)
+    hsize = UInt16(length(fields) * 32 + 32 + 1) # +1 for the 0xD delimiter
     rsize = UInt16(sum(x -> x.length, fields)) + 1
 
     version = 0x03
