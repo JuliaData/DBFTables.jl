@@ -192,10 +192,12 @@ end
 
 "Read a field descriptor from the stream, and create a FieldDescriptor struct"
 function read_dbf_field(io::IO)
-    field_name_bytes = read(io, 11)
-    i = findfirst(iszero, field_name_bytes)
-    n = i === nothing ? 11 : i - 1
+    n_bytes_field_name = 11 # field name can be up to 11 bytes long, delimited by '\0' (end of string, EOS)
+    field_name_bytes = read(io, n_bytes_field_name)
+    pos_eos = findfirst(iszero, field_name_bytes)
+    n = pos_eos === nothing ? n_bytes_field_name : pos_eos - 1
     field_name = Symbol(field_name_bytes[1:n])
+
     field_type = read(io, Char)
     skip(io, 4)  # skip
     field_len = read(io, UInt8)
