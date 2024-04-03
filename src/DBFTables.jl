@@ -452,7 +452,9 @@ function Base.getproperty(dbf::Table, name::Symbol)
     nrow = header.records
     @inbounds field = getfields(dbf)[col]
     str = getstrings(dbf)
-    return @inbounds Union{field.type, Missing}[julia_value(field, str[col, i]) for i = 1:nrow]
+    ft = field.type
+    fv = Val{field.dbf_type}()
+    return @inbounds Union{field.type, Missing}[julia_value(ft, fv, str[col, i]) for i = 1:nrow]
 end
 
 
