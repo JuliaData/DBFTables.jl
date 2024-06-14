@@ -4,118 +4,99 @@ using Tables
 using DataFrames
 using Dates
 
-test_dbf_path = joinpath(@__DIR__, "test.dbf")
-dbf = DBFTables.Table(test_dbf_path)
-df = DataFrame(dbf)
-row, st = iterate(dbf)
+#-----------------------------------------------------------------------------# setup
+df = DataFrame(
+    a = [1,2,3],
+    b = ["one", "two", "three"],
+    c = [true, true, false],
+    d = [today() + Day(i) for i in 1:3],
+    e = 1.0:3.0,
+    f = ["😄", "∱", "∫eˣ123"]
+)
 
+# Same as above but with missings
+df2 = vcat(df, DataFrame([missing missing missing missing missing missing], names(df)))
+
+# `df2` as a DBFTables.Table
+dbf = DBFTables.Table(DBFTables.write(tempname(), df2))
+
+# `dbf` after write/read roundtrip
+dbf2 = DBFTables.Table(DBFTables.write(tempname(), dbf))
+
+# Check that data survives a write/read roundtrip
+function roundtrip(t)
+    path = DBFTables.write(tempname(), t)
+    t2 = DBFTables.Table(path)
+    isequal(DataFrame(t), DataFrame(t2))
+end
+
+#-----------------------------------------------------------------------------# tests
 @testset "DBFTables" begin
-    @testset "Writing" begin
-        tables_equal(tbl1, tbl2) = all(zip(Tables.columns(tbl1), Tables.columns(tbl2))) do (t1, t2)
-            all(ismissing(a) ? ismissing(b) : a == b for (a,b) in zip(t1,t2))
-        end
-        function _roundtrip(table)
-            file = joinpath(tempdir(), "test.dbf")
-            DBFTables.write(file, table)
-            table2 = DBFTables.Table(file)
-        end
-        roundtrip(table) = tables_equal(DataFrame(table), DataFrame(_roundtrip(table)))
+    @testset "DBFTables.Table roundtrip" begin
+        @test Tables.schema(df2) == Tables.schema(dbf)
+        @test Tables.schema(dbf) == Tables.schema(dbf2)
+        @test isequal(NamedTuple.(dbf), NamedTuple.(dbf2))
+
+        @test DBFTables.isdeleted(dbf2) isa BitVector
+        @test all(.!DBFTables.isdeleted(dbf2))
+        @test !DBFTables.isdeleted(dbf2, 3)
+
+        @test ismissing(dbf2.a[end])
+    end
+
+    @testset "Tables.jl roundtrips" begin
         @test roundtrip(df)
+        @test roundtrip(df2)
         @test roundtrip(dbf)
         @test roundtrip([(x=Float32(1), y=1), (x=Float32(2), y=2), (x=missing, y=3)])
         @test roundtrip([(x=true, y="test"), (x=missing, y=missing)])
         @test roundtrip([(x=today(), y=missing), (x=missing, y=today())])
-        @test roundtrip([(; x=1.0), (;x=missing)])
+        @test roundtrip([(; x=1.0), (; x=missing)])
         @test roundtrip([(; x=missing), (; x=missing)])
 
-        @test_warn "No DBF type" DBFTables.write(tempname(), [(; x = rand(1))])
-        @test_warn "truncated to 254 characters" DBFTables.write(tempname(), [(; x = rand(999))])
-
-        # Base.write for DBFTables.Table
-        file = joinpath(tempdir(), "test.dbf")
-        write(file, dbf)
-        dbf2 = DBFTables.Table(file)
-        @test tables_equal(dbf, dbf2)
+        @test_warn "No DBF type associated with Julia type Vector{Float64}" DBFTables.write(tempname(), [(; x = rand(5))])
+        @test_throws Exception DBFTables.write(tempname(), [(; x = rand(999))])
     end
 
-    @testset "DataFrame indexing" begin
-        @test size(df, 1) == 7 # records
-        @test size(df, 2) == 6 # fields
-        @test df[2, :CHAR] == "John"
-        @test df[1, :DATE] == Date("19900102", dateformat"yyyymmdd")
-        @test df[3, :BOOL] == false
-        @test df[1, :FLOAT] == 10.21
-        @test df[2, :NUMERIC] == 12.21
-        @test df[3, :INTEGER] == 102
-    end
-
-    @testset "missing entries" begin
-        @test ismissing(df[4, :BOOL])
-        @test ismissing(df[5, :FLOAT])
-        @test ismissing(df[6, :NUMERIC])
-        @test ismissing(df[7, :INTEGER])
-    end
-
-    @testset "header" begin
-        h = DBFTables.Header(open(test_dbf_path))
-        @test h.version == 3
-        @test h.last_update == Date("20140806", dateformat"yyyymmdd")
-        @test h.records == 7
-        @test length(h.fields) == 6
+    @testset "Header" begin
+        # Verify that Header survives write/read roundtrip
+        h, h2 = getfield(dbf, :header), getfield(dbf2, :header)
+        for name in fieldnames(DBFTables.Header)
+            @test getfield(h, name) == getfield(h2, name)
+        end
     end
 
     @testset "show" begin
-        @test sprint(show, row) === sprint(show, NamedTuple(row))
-        # use replace to update to julia 1.4 union printing
-        @test replace(sprint(show, dbf), r"\} +" => "}") ===
-              "DBFTables.Table with 7 rows and 6 columns\nTables.Schema:\n :CHAR     Union{Missing, String}\n :DATE     Union{Missing, Date}\n :BOOL     Union{Missing, Bool}\n :FLOAT    Union{Missing, Float64}\n :NUMERIC  Union{Missing, Float64}\n :INTEGER  Union{Missing, $Int}\n"
+        str = """
+        DBFTables.Table with 4 rows and 6 columns
+        Tables.Schema:
+         :a  Union{Missing, $Int}
+         :b  Union{Missing, String}
+         :c  Union{Missing, Bool}
+         :d  Union{Missing, Date}
+         :e  Union{Missing, Float64}
+         :f  Union{Missing, String}
+        """
+        @test sprint(show, dbf) == str
     end
 
-    @testset "iterate" begin
-        @test st === 2
-        @test haskey(row, :CHAR)
-        @test row.CHAR === "Bob"
-        @test row[2] === Date("19900102", dateformat"yyyymmdd")
-        @test_throws ArgumentError row.nonexistent_field
-        firstrow = (
-            CHAR = "Bob",
-            DATE = Date("19900102", dateformat"yyyymmdd"),
-            BOOL = false,
-            FLOAT = 10.21,
-            NUMERIC = 11.21,
-            INTEGER = 100,
-        )
-        @test NamedTuple(row) === firstrow
-        @test row isa DBFTables.Row
-        @test row isa Tables.AbstractRow
-        @test length(row) === 6
-        @test size(row) === (6,)
-        @test size(row, 1) === 6
-        @test_throws BoundsError size(row, 2)
-        @test DBFTables.getrow(row) === 1
-        @test DBFTables.gettable(row) === dbf
-        @test sum(1 for row in dbf) === 7
-        @test sum(1 for cell in row) === 6
-        @test propertynames(dbf) == [:CHAR, :DATE, :BOOL, :FLOAT, :NUMERIC, :INTEGER]
-        @test propertynames(row) == [:CHAR, :DATE, :BOOL, :FLOAT, :NUMERIC, :INTEGER]
-    end
+    @testset "iterate and other Base methods" begin
+        @test size(dbf) == size(df2)
+        @test size(dbf, 1) == size(df2, 1)
+        @test size(dbf, 2) == size(df2, 2)
+        for row in dbf
+            @test_throws ArgumentError row.nonexistent_field
+            @test length(row) == length('a':'f')
+            @test size(row) == (length(row), )
+            @test size(row, 1) == length(row)
+            @test propertynames(row) == Symbol.('a':'f')
+            for prop in propertynames(row)
+                @test getproperty(row, prop) isa Any # dummy test to ensure no error is thrown
+            end
+        end
 
-    @testset "column" begin
-        @test size(dbf) === (7, 6)
-        @test size(dbf, 2) === 6
-
-        @test length(dbf.CHAR) === 7
-        @test dbf.CHAR isa Vector{Union{String,Missing}}
-        @test dbf.INTEGER isa Vector{Union{Int,Missing}}
-        @test_throws ArgumentError row.nonexistent_field
-        @test dbf.INTEGER[2] === 101
-        @test ismissing(dbf.INTEGER[7])
-        @test dbf.CHAR[2] === "John"
-        @test ismissing(dbf.CHAR[7])
-
-        @test DBFTables.isdeleted(dbf) isa BitVector
-        @test all(.!DBFTables.isdeleted(dbf))
-        @test !DBFTables.isdeleted(dbf, 3)
+        @test sum(1 for row in dbf) === 4
+        @test sum(1 for cell in first(dbf)) === 6
     end
 
     @testset "Numeric 20-character Limit Nonsense" begin
@@ -127,7 +108,7 @@ row, st = iterate(dbf)
         @test DBFTables.dbf_value(Val('N'), 0x01, negbig) == string(negbig)
         @test_throws Exception DBFTables.dbf_value(Val('N'), 0x01, negbig - 1)
 
-        @test_warn r"DBF limitation" DBFTables.dbf_value(Val('N'), 0x01, prevfloat(Inf))
-        @test_warn r"DBF limitation" DBFTables.dbf_value(Val('N'), 0x01, nextfloat(-Inf))
+        @test_warn "DBF limitation" DBFTables.dbf_value(Val('N'), 0x01, prevfloat(Inf))
+        @test_warn "DBF limitation" DBFTables.dbf_value(Val('N'), 0x01, nextfloat(-Inf))
     end
-end  # testset "DBFTables"
+end

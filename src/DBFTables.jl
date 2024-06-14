@@ -24,13 +24,9 @@ function FieldDescriptor(name::Symbol, data::AbstractVector)
     elseif T === Union{}  # data is only missings
         len = 0x01
     elseif char === 'C'
-        width = T <: AbstractString ? maximum(length, itr) : maximum(x -> length(string(x)), itr)
-        if width > 254
-            @warn "Due to DBF limitations, strings in field $name will be truncated to 254 characters."
-            len = UInt8(254)
-        else
-            len = UInt8(width)
-        end
+        width = T <: AbstractString ? maximum(sizeof, itr) : maximum(x -> sizeof(string(x)), itr)
+        width > 254 && error("String data must be <254 characters due to DBF limitations.  Found: $width.")
+        len = UInt8(width)
     elseif char === 'N'
         len = UInt8(20)
         ndec = T <: AbstractFloat ? 0x1 : 0x0
@@ -73,7 +69,7 @@ end
 #-----------------------------------------------------------------------# conversions: Julia-to-DBF
 # These are the only types DBFTables.jl will use to save data as.
 "Get the DBF type code from the Julia type.  Assumes `Base.nonmissingtype(T)` is the input."
-dbf_type(::Type{<:AbstractString}) = 'C'
+dbf_type(::Type{<:Union{Char, AbstractString}}) = 'C'
 dbf_type(::Type{Bool}) = 'L'
 dbf_type(::Type{<:Integer}) = 'N'
 dbf_type(::Type{<:AbstractFloat}) = 'N'
@@ -88,10 +84,11 @@ dbf_value(field::FieldDescriptor, val) = dbf_value(Val(field.dbf_type), field.le
 
 # String (or any other type that gets mapped to 'C')
 function dbf_value(::Val{'C'}, len::UInt8, x)
-    out = replace(rpad(x, len), !isascii => x -> '_' ^ textwidth(x))
-    length(out) > 254 ? out[1:254] : out
+    s = string(x)
+    out = s * '\0' ^ (len - ncodeunits(s))
+    sizeof(out) > 254 ? error("The DBF format cannot save strings >254 characters.") : out
 end
-dbf_value(::Val{'C'}, len::UInt8, ::Missing) = ' ' ^ len
+dbf_value(::Val{'C'}, len::UInt8, ::Missing) = '\0' ^ len
 
 # Bool
 dbf_value(::Val{'L'}, ::UInt8, x::Bool) = x ? 'T' : 'F'
@@ -100,7 +97,7 @@ dbf_value(::Val{'L'}, ::UInt8, ::Missing) = '?'
 # Integer
 function dbf_value(::Val{'N'}, ::UInt8, x::Integer)
     s = rpad(x, 20)
-    length(s) > 20 ? error("The DBF format cannot save integers >20 characters.") : s
+    sizeof(s) > 20 ? error("The DBF format cannot save integers >20 characters.") : s
 end
 
 # AbstractFloat
@@ -111,7 +108,7 @@ function dbf_value(::Val{'N'}, ::UInt8, x::AbstractFloat)
     s2 = @sprintf "%.20e" x
     i = findfirst('e', s2)
     s_end = replace(s2[i:end], '+' => "")
-    len  = length(s_end)
+    len = length(s_end)
     n = 20 - len
     out = s2[1:n] * s_end
     @warn "A DBF limitation has reduced the precision of $x by $(length(s) - 20) digits."
@@ -145,8 +142,7 @@ end
 julia_value(o::FieldDescriptor, s::AbstractString) = julia_value(o.type, Val(o.dbf_type), s::AbstractString)
 
 function julia_value_string(s::AbstractString)
-    s2 = strip(s)
-    isempty(s2) ? missing : String(s2)
+    all(==('\0'), s) ? missing : strip(x -> isspace(x) || x == '\0', s)
 end
 
 julia_value(::Type{String}, ::Val{'C'}, s::AbstractString) = julia_value_string(s)
@@ -332,7 +328,7 @@ function Table(io::IO)
     # Make sure data is read at the right position
     bytes_to_skip = header.hsize - position(io)
     bytes_to_skip > 0 && skip(io, bytes_to_skip)
-    
+
     data = Vector{UInt8}(undef, header.rsize * header.records)
     read!(io, data)
     strings = _create_stringarray(header, data)
@@ -463,7 +459,7 @@ Base.write(path::AbstractString, dbf::Table) = open(io -> Base.write(io, dbf), t
 
 
 "Generic .dbf writer for the Tables.jl interface."
-write(path::AbstractString, tbl) = open(io -> write(io, tbl), touch(path), "w")
+write(path::AbstractString, tbl) = (open(io -> write(io, tbl), touch(path), "w"); path)
 
 function write(io::IO, tbl)
     dct = Tables.dictcolumntable(tbl)
