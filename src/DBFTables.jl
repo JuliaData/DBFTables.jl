@@ -24,7 +24,7 @@ function FieldDescriptor(name::Symbol, data::AbstractVector)
     elseif T === Union{}  # data is only missings
         len = 0x01
     elseif char === 'C'
-        width = T <: AbstractString ? maximum(sizeof, itr) : maximum(x -> sizeof(string(x)), itr)
+        width = maximum(x -> ncodeunits(string(x)), itr)
         width > 254 && error("String data must be <254 characters due to DBF limitations.  Found: $width.")
         len = UInt8(width)
     elseif char === 'N'
@@ -86,7 +86,7 @@ dbf_value(field::FieldDescriptor, val) = dbf_value(Val(field.dbf_type), field.le
 function dbf_value(::Val{'C'}, len::UInt8, x)
     s = string(x)
     out = s * '\0' ^ (len - ncodeunits(s))
-    sizeof(out) > 254 ? error("The DBF format cannot save strings >254 characters.") : out
+    ncodeunits(out) > 254 ? error("The DBF format cannot save strings >254 characters.") : out
 end
 dbf_value(::Val{'C'}, len::UInt8, ::Missing) = '\0' ^ len
 
@@ -97,7 +97,7 @@ dbf_value(::Val{'L'}, ::UInt8, ::Missing) = '?'
 # Integer
 function dbf_value(::Val{'N'}, ::UInt8, x::Integer)
     s = rpad(x, 20)
-    sizeof(s) > 20 ? error("The DBF format cannot save integers >20 characters.") : s
+    length(s) > 20 ? error("The DBF format cannot save integers >20 characters.") : s
 end
 
 # AbstractFloat
