@@ -22,7 +22,8 @@ df = DataFrame(
 )
 
 # Write any Tables.jl source to a .dbf file
-path = DBFTables.write(tempname(), df)
+path = tempname()
+DBFTables.write(path, df)
 
 # Read the data back in from the .dbf file
 dbf = DBFTables.Table(path)
