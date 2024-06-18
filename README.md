@@ -62,4 +62,4 @@ The DBF format is quite old (introduced in 1983).  As such, it has some quirks t
   - `'N'` (Numeric): `Integer`s and `AbstractFloat`s.
   - `'L'` (Logical): `Bool`s.
   - `'D'` (Date): `Date`s.
-4. The `'N`` (Numeric) data type restricts values to fit within 20 printed characters.  All `Int64`s fit within 20 characters, but `Float64`s may not.  E.g. `string(nextfloat(-Inf))` is 23 characters.  DBFTables.jl will remove the least significant digits (loss of precision) in order to fit within the 20 character limit.
+4. The `'N` (Numeric) data type restricts values to fit within 20 printed characters.  All `Int64`s fit within 20 characters, but `Float64`s may not.  E.g. `string(nextfloat(-Inf))` is 23 characters.  DBFTables.jl will remove the least significant digits (loss of precision) in order to fit within the 20 character limit.
