@@ -13,28 +13,30 @@ Read xBase / dBASE III+ [.dbf](https://en.wikipedia.org/wiki/.dbf) files in Juli
 ## Usage
 
 ```julia
-using DBFTables
-dbf = DBFTables.Table("test.dbf")
+using DBFTables, DataFrames
 
-# whole columns can be retrieved by their name
-# note that this creates a copy, so instead of repeated `dbf.field` calls,
-# it is faster to once do `field = dbf.field` and then use `field` instead
-dbf.INTEGER  # => Union{Missing, Int64}[100, 101, 102, 0, 2222222222, 4444444444, missing]
+df = DataFrame(
+    x = 1:5,
+    y = rand(Bool, 5),
+    z = ["a", "b", "c", "d", "e"]
+)
 
-# example function that iterates over the rows and uses two columns
-function sumif(dbf)
-    total = 0.0
-    for row in dbf
-        if row.BOOLEAN && !ismissing(row.NUMERIC)
-            value += row.NUMERIC
-        end
-    end
-    return total
+# Write any Tables.jl source to a .dbf file
+path = DBFTables.write(tempname(), df)
+
+# Read the data back in from the .dbf file
+dbf = DBFTables.Table(path)
+
+# Retrieve columns by their name
+dbf.x
+
+# Iterate over the rows (values can be accessed by column name)
+for row in dbf
+    @info (row.x, row.y, row.z)
 end
 
-# for other functionality, convert to other Tables such as DataFrame
-using DataFrames
-df = DataFrame(dbf)
+# Pass the DBFTables.Table to any Tables.jl sink
+df2 = DataFrame(dbf)
 ```
 
 ## Format description resources
