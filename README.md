@@ -49,3 +49,17 @@ The DBF header contains information on the amount of rows, which columns are pre
 The `DBFTables.Table` struct holds both the header and data. All data is read into memory in one go as a `Vector{UInt8}`. To provide efficient access into the individual entries, we use [WeakRefStrings](https://github.com/JuliaData/WeakRefStrings.jl/). WeakRefStrings' `StringArray` only holds the offsets and lengths into the `Vector{UInt8}` with all the data. Then we still need to convert from the string to the julia type. This is done on demand with `dbf_value`.
 
 Note that the format also contains a "record deleted" flag, which is represented by a `'*'` at the start of the row. When this is encountered the record should be treated as if it doesn't exist. Since normally writers strip these records when writing, they are rarely encountered. For that reason this package ignores these flags by default right now. To check for the flags yourself, there is the `isdeleted` function. A sample file with deleted record flags is available [here](https://issues.qgis.org/issues/11007#note-30).
+
+
+## Quirks and Gotchas
+
+The DBF format is quite old (introduced in 1983).  As such, it has some quirks that may not be immediately obvious:
+
+1. An empty string is equivalent to a missing value.  Thus an empty string in a table will not survive a `write`/`read` round trip.
+2. Strings are limited to 254 characters.  Attempting to write longer Strings results in an error.
+3. In order to support as many versions of DBF as possible, DBFTables.jl will only write data as one of the following DBF data types:
+  - `'C'` (Character): `String`s (and anything else that doesn't doesn't match one of the other three types).
+  - `'N'` (Numeric): `Integer`s and `AbstractFloat`s.
+  - `'L'` (Logical): `Bool`s.
+  - `'D'` (Date): `Date`s.
+4. The `'N` (Numeric) data type restricts values to fit within 20 printed characters.  All `Int64`s fit within 20 characters, but `Float64`s may not.  E.g. `string(nextfloat(-Inf))` is 23 characters.  DBFTables.jl will remove the least significant digits (loss of precision) in order to fit within the 20 character limit.
