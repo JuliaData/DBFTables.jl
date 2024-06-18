@@ -85,10 +85,10 @@ dbf_value(field::FieldDescriptor, val) = dbf_value(Val(field.dbf_type), field.le
 # String (or any other type that gets mapped to 'C')
 function dbf_value(::Val{'C'}, len::UInt8, x)
     s = string(x)
-    out = s * '\0' ^ (len - ncodeunits(s))
+    out = s * ' ' ^ (len - ncodeunits(s))
     ncodeunits(out) > 254 ? error("The DBF format cannot save strings >254 characters.") : out
 end
-dbf_value(::Val{'C'}, len::UInt8, ::Missing) = '\0' ^ len
+dbf_value(::Val{'C'}, len::UInt8, ::Missing) = ' ' ^ len
 
 # Bool
 dbf_value(::Val{'L'}, ::UInt8, x::Bool) = x ? 'T' : 'F'
@@ -142,7 +142,8 @@ end
 julia_value(o::FieldDescriptor, s::AbstractString) = julia_value(o.type, Val(o.dbf_type), s::AbstractString)
 
 function julia_value_string(s::AbstractString)
-    all(==('\0'), s) ? missing : strip(x -> isspace(x) || x == '\0', s)
+    out = strip(x -> isspace(x) || x == '\0', s)
+    isempty(out) ? missing : out
 end
 
 julia_value(::Type{String}, ::Val{'C'}, s::AbstractString) = julia_value_string(s)
@@ -188,19 +189,14 @@ end
 
 "Read a field descriptor from the stream, and create a FieldDescriptor struct"
 function read_dbf_field(io::IO)
-    n_bytes_field_name = 11 # field name can be up to 11 bytes long, delimited by '\0' (end of string, EOS)
-    field_name_bytes = read(io, n_bytes_field_name)
-    pos_eos = findfirst(iszero, field_name_bytes)
-    n = pos_eos === nothing ? n_bytes_field_name : pos_eos - 1
-    field_name = Symbol(field_name_bytes[1:n])
-
-    field_type = read(io, Char)
+    name = Symbol(filter!(!iszero, read(io, 11)))  # 11 bytes padded by '\0'
+    dbf_type = read(io, Char)
     skip(io, 4)  # skip
-    field_len = read(io, UInt8)
-    field_dec = read(io, UInt8)
+    length = read(io, UInt8)
+    ndec = read(io, UInt8)
     skip(io, 14)  # reserved
-    jltype = julia_type(Val(field_type), field_dec)
-    return FieldDescriptor(field_name, jltype, field_type, field_len, field_dec)
+    type = julia_type(Val(dbf_type), ndec)
+    return FieldDescriptor(name, type, dbf_type, length, ndec)
 end
 
 reserved(n) = fill(0x00, n)
@@ -243,15 +239,7 @@ function Header(io::IO)
         fieldcolumns[field.name] = col
         push!(fields, field)
         col += 1
-
-        # peek if we are at the end
-        mark(io)
-        trm = read(io, UInt8)
-        if trm == 0xD
-            break
-        else
-            reset(io)
-        end
+        peek(io) == 0x0d && break
     end
 
     return Header(
