@@ -143,7 +143,7 @@ julia_value(o::FieldDescriptor, s::AbstractString) = julia_value(o.type, Val(o.d
 
 function julia_value_string(s::AbstractString)
     out = strip(x -> isspace(x) || x == '\0', s)
-    isempty(out) ? missing : out
+    isempty(out) ? missing : string(out)
 end
 
 julia_value(::Type{String}, ::Val{'C'}, s::AbstractString) = julia_value_string(s)
